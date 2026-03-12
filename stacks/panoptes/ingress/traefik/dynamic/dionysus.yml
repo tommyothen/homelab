@@ -1,0 +1,181 @@
+# File provider routes for services running on Dionysus.
+#
+# Backend IPs use the Dionysus Tailscale IP (DIONYSUS_TAILSCALE_IP env var).
+# All service ports on Dionysus are firewall-restricted to tailscale0 only —
+# LAN guests cannot reach them directly even if they know the port numbers.
+# Traefik routes to them via the Panoptes host's Tailscale overlay.
+#
+# Plex and Seerr are intentionally exposed on both admin (Tailscale) and LAN
+# entrypoints; all other Dionysus routes are admin-only.
+
+http:
+  routers:
+    # --- Media (own auth — no Authentik middleware) ---
+    plex:
+      rule: "Host(`plex.0x21.uk`)"
+      service: plex
+      entryPoints: [ websecure, lanwebsecure ]
+    seerr:
+      rule: "Host(`seerr.0x21.uk`)"
+      service: seerr
+      entryPoints: [ websecure, lanwebsecure ]
+
+    # --- Media (Authentik-protected) ---
+    sonarr:
+      rule: "Host(`sonarr.0x21.uk`)"
+      service: sonarr
+      entryPoints: [ websecure ]
+      middlewares: [ authentik ]
+    radarr:
+      rule: "Host(`radarr.0x21.uk`)"
+      service: radarr
+      entryPoints: [ websecure ]
+      middlewares: [ authentik ]
+    prowlarr:
+      rule: "Host(`prowlarr.0x21.uk`)"
+      service: prowlarr
+      entryPoints: [ websecure ]
+      middlewares: [ authentik ]
+    sabnzbd:
+      rule: "Host(`sabnzbd.0x21.uk`)"
+      service: sabnzbd
+      entryPoints: [ websecure ]
+      middlewares: [ authentik ]
+    qbittorrent:
+      rule: "Host(`qbit.0x21.uk`)"
+      service: qbittorrent
+      entryPoints: [ websecure ]
+      middlewares: [ authentik ]
+    seanime:
+      rule: "Host(`seanime.0x21.uk`)"
+      service: seanime
+      entryPoints: [ websecure ]
+      middlewares: [ authentik ]
+    tdarr:
+      rule: "Host(`tdarr.0x21.uk`)"
+      service: tdarr
+      entryPoints: [ websecure ]
+      middlewares: [ authentik ]
+
+    # --- Books ---
+    lazylibrarian:
+      rule: "Host(`books.0x21.uk`)"
+      service: lazylibrarian
+      entryPoints: [ websecure ]
+      middlewares: [ authentik ]
+    calibre-web:
+      rule: "Host(`calibre.0x21.uk`)"
+      service: calibre-web
+      entryPoints: [ websecure ]
+      middlewares: [ authentik ]
+    shelfmark:
+      rule: "Host(`shelfmark.0x21.uk`)"
+      service: shelfmark
+      entryPoints: [ websecure ]
+      middlewares: [ authentik ]
+
+    # --- Personal ---
+    mealie:
+      rule: "Host(`mealie.0x21.uk`)"
+      service: mealie
+      entryPoints: [ websecure ]
+      middlewares: [ authentik ]
+    actual-budget:
+      rule: "Host(`budget.0x21.uk`)"
+      service: actual-budget
+      entryPoints: [ websecure ]
+      middlewares: [ authentik ]
+    wallos:
+      rule: "Host(`wallos.0x21.uk`)"
+      service: wallos
+      entryPoints: [ websecure ]
+      middlewares: [ authentik ]
+    stirling-pdf:
+      rule: "Host(`pdf.0x21.uk`)"
+      service: stirling-pdf
+      entryPoints: [ websecure ]
+      middlewares: [ authentik ]
+    it-tools:
+      rule: "Host(`tools.0x21.uk`)"
+      service: it-tools
+      entryPoints: [ websecure ]
+      middlewares: [ authentik ]
+    paperless:
+      rule: "Host(`paperless.0x21.uk`)"
+      service: paperless
+      entryPoints: [ websecure ]
+      middlewares: [ authentik ]
+
+  services:
+    plex:
+      loadBalancer:
+        servers:
+          - url: 'http://{{ env "DIONYSUS_TAILSCALE_IP" }}:32400'
+    sonarr:
+      loadBalancer:
+        servers:
+          - url: 'http://{{ env "DIONYSUS_TAILSCALE_IP" }}:8989'
+    radarr:
+      loadBalancer:
+        servers:
+          - url: 'http://{{ env "DIONYSUS_TAILSCALE_IP" }}:7878'
+    prowlarr:
+      loadBalancer:
+        servers:
+          - url: 'http://{{ env "DIONYSUS_TAILSCALE_IP" }}:9696'
+    seerr:
+      loadBalancer:
+        servers:
+          - url: 'http://{{ env "DIONYSUS_TAILSCALE_IP" }}:5055'
+    sabnzbd:
+      loadBalancer:
+        servers:
+          - url: 'http://{{ env "DIONYSUS_TAILSCALE_IP" }}:8080'
+    qbittorrent:
+      loadBalancer:
+        servers:
+          - url: 'http://{{ env "DIONYSUS_TAILSCALE_IP" }}:8090'
+    seanime:
+      loadBalancer:
+        servers:
+          - url: 'http://{{ env "DIONYSUS_TAILSCALE_IP" }}:43211'
+    tdarr:
+      loadBalancer:
+        servers:
+          - url: 'http://{{ env "DIONYSUS_TAILSCALE_IP" }}:8265'
+    lazylibrarian:
+      loadBalancer:
+        servers:
+          - url: 'http://{{ env "DIONYSUS_TAILSCALE_IP" }}:5299'
+    calibre-web:
+      loadBalancer:
+        servers:
+          - url: 'http://{{ env "DIONYSUS_TAILSCALE_IP" }}:8083'
+    shelfmark:
+      loadBalancer:
+        servers:
+          - url: 'http://{{ env "DIONYSUS_TAILSCALE_IP" }}:8181'
+    mealie:
+      loadBalancer:
+        servers:
+          - url: 'http://{{ env "DIONYSUS_TAILSCALE_IP" }}:9925'
+    actual-budget:
+      loadBalancer:
+        servers:
+          - url: 'http://{{ env "DIONYSUS_TAILSCALE_IP" }}:5006'
+    wallos:
+      loadBalancer:
+        servers:
+          - url: 'http://{{ env "DIONYSUS_TAILSCALE_IP" }}:8282'
+    stirling-pdf:
+      loadBalancer:
+        servers:
+          - url: 'http://{{ env "DIONYSUS_TAILSCALE_IP" }}:7777'
+    it-tools:
+      loadBalancer:
+        servers:
+          - url: 'http://{{ env "DIONYSUS_TAILSCALE_IP" }}:8183'
+    paperless:
+      loadBalancer:
+        servers:
+          - url: 'http://{{ env "DIONYSUS_TAILSCALE_IP" }}:8000'

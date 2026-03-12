@@ -1,0 +1,220 @@
+# stacks/panoptes/ingress/homepage/services.yaml
+
+- Media:
+    - Plex:
+        href: https://plex.0x21.uk
+        description: Media server
+        icon: plex.png
+        widget:
+          type: plex
+          url:  http://dionysus:32400
+          key:  "{{HOMEPAGE_VAR_PLEX_API_KEY}}"
+
+    - Sonarr:
+        href: https://sonarr.0x21.uk
+        description: TV series
+        icon: sonarr.png
+        widget:
+          type: sonarr
+          url:  http://dionysus:8989
+          key:  "{{HOMEPAGE_VAR_SONARR_API_KEY}}"
+          enableQueue: true
+
+    - Radarr:
+        href: https://radarr.0x21.uk
+        description: Movies
+        icon: radarr.png
+        widget:
+          type: radarr
+          url:  http://dionysus:7878
+          key:  "{{HOMEPAGE_VAR_RADARR_API_KEY}}"
+          enableQueue: true
+
+    - Prowlarr:
+        href: https://prowlarr.0x21.uk
+        description: Indexer manager
+        icon: prowlarr.png
+        widget:
+          type: prowlarr
+          url:  http://dionysus:9696
+          key:  "{{HOMEPAGE_VAR_PROWLARR_API_KEY}}"
+
+    - Seerr:
+        href: https://seerr.0x21.uk
+        description: Media requests
+        icon: overseerr.png
+        widget:
+          type: overseerr
+          url:  http://dionysus:5055
+          key:  "{{HOMEPAGE_VAR_PLEX_API_KEY}}"
+
+    - SABnzbd:
+        href: https://sabnzbd.0x21.uk
+        description: Usenet downloader
+        icon: sabnzbd.png
+        widget:
+          type: sabnzbd
+          url:  http://dionysus:8080
+          key:  "{{HOMEPAGE_VAR_SABNZBD_API_KEY}}"
+
+    - qBittorrent:
+        href: https://qbit.0x21.uk
+        description: Torrent (VPN)
+        icon: qbittorrent.png
+        widget:
+          type:     qbittorrent
+          url:      http://dionysus:8090
+          username: "{{HOMEPAGE_VAR_QBIT_USERNAME}}"
+          password: "{{HOMEPAGE_VAR_QBIT_PASSWORD}}"
+
+    - Tdarr:
+        href: https://tdarr.0x21.uk
+        description: Media transcoding
+        icon: tdarr.png
+        widget:
+          type: tdarr
+          url:  http://dionysus:8265
+
+- Books:
+    - LazyLibrarian:
+        href: https://books.0x21.uk
+        description: Book acquisition
+        icon: lazylibrarian.png
+
+    - Calibre-Web:
+        href: https://calibre.0x21.uk
+        description: Book library & OPDS
+        icon: calibre-web.png
+
+    - Shelfmark:
+        href: https://shelfmark.0x21.uk
+        description: Anna's Archive search
+        icon: mdi-bookshelf
+
+- Observability:
+    - Grafana:
+        href: https://grafana.0x21.uk
+        description: Dashboards
+        icon: grafana.png
+        widget:
+          type: grafana
+          url:  http://panoptes:3000   # native NixOS service, reach via host LAN IP
+          username: admin
+          password: "{{HOMEPAGE_VAR_GRAFANA_PASS}}"
+
+    - Prometheus:
+        href: https://prometheus.0x21.uk
+        description: Metrics
+        icon: prometheus.png
+        widget:
+          type: prometheus
+          url:  http://panoptes:9090   # native NixOS service
+
+    - Gatus:
+        href: https://status.0x21.uk
+        description: Service uptime
+        icon: gatus.png
+        widget:
+          type: gatus
+          url:  http://gatus:8080
+
+    - Speedtest Tracker:
+        href: https://speedtest.0x21.uk
+        description: ISP speed history
+        icon: mdi-speedometer
+        widget:
+          type:    speedtest
+          url:     http://speedtest-tracker:80   # same Docker network, internal port
+          bitratePrecision: 0
+
+- Personal:
+    - Mealie:
+        href: https://mealie.0x21.uk
+        description: Recipes
+        icon: mealie.png
+
+    - Actual Budget:
+        href: https://budget.0x21.uk
+        description: Personal finance
+        icon: actual-budget.png
+
+    - Wallos:
+        href: https://wallos.0x21.uk
+        description: Subscriptions
+        icon: wallos.png
+
+    - Stirling PDF:
+        href: https://pdf.0x21.uk
+        description: PDF tools
+        icon: stirling-pdf.png
+
+    - IT-Tools:
+        href: https://tools.0x21.uk
+        description: Developer utilities
+        icon: it-tools.png
+
+    - Miniflux:
+        href: https://rss.0x21.uk
+        description: RSS reader
+        icon: miniflux.png
+
+    - Paperless-ngx:
+        href: https://paperless.0x21.uk
+        description: Document management
+        icon: paperless-ngx.png
+
+- Infrastructure:
+    - Proxmox:
+        href: https://pve.0x21.uk
+        description: Hypervisor
+        icon: proxmox.png
+        widget:
+          type: proxmox
+          url: https://pve.0x21.uk
+          username: "{{HOMEPAGE_VAR_PROXMOX_USERNAME}}"
+          password: "{{HOMEPAGE_VAR_PROXMOX_PASSWORD}}"
+
+    - Home Assistant:
+        href: https://ha.0x21.uk
+        description: Home automation
+        icon: home-assistant.png
+
+    - Authentik:
+        href: https://auth.0x21.uk
+        description: SSO
+        icon: authentik.png
+
+    - Traefik:
+        href: https://traefik.0x21.uk
+        description: Reverse proxy
+        icon: traefik.png
+
+    - Homelab Hub:
+        href: https://map.0x21.uk
+        description: Inventory + topology map
+        icon: mdi-family-tree
+
+    - Portainer:
+        href: https://portainer.0x21.uk
+        description: Docker management
+        icon: portainer.png
+        widget:
+          type: portainer
+          url:  http://portainer:9000
+          env:  1
+          key:  "{{HOMEPAGE_VAR_PORTAINER_API_KEY}}"
+
+    - Notifiarr:
+        href: https://notifiarr.0x21.uk
+        description: Notifications -> Discord
+        icon: notifiarr.png
+
+    - AdGuard Home:
+        href: https://adguard.0x21.uk
+        description: DNS / ad-block
+        icon: adguard-home.png
+        widget:
+          type: adguard
+          url:  http://cerberus:8080
+          username: "{{HOMEPAGE_VAR_ADGUARD_USER}}"
+          password: "{{HOMEPAGE_VAR_ADGUARD_PASS}}"

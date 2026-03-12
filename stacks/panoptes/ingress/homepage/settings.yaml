@@ -1,0 +1,33 @@
+# stacks/panoptes/ingress/homepage/settings.yaml
+
+title: 0x21 Homelab
+
+theme: dark
+color: zinc
+
+useEqualHeights: true
+statusStyle: dot
+headerStyle: clean
+
+# Five-column layout per group where supported
+layout:
+  Media:
+    header: true
+    style:  row
+    columns: 4
+  Books:
+    header: true
+    style:  row
+    columns: 3
+  Observability:
+    header: true
+    style:  row
+    columns: 4
+  Personal:
+    header: true
+    style:  row
+    columns: 4
+  Infrastructure:
+    header: true
+    style:  row
+    columns: 6

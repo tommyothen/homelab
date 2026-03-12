@@ -1,0 +1,156 @@
+---
+# stacks/hephaestus/pterodactyl/docker-compose.yml
+#
+# Pelican Panel — game server management UI (Pterodactyl successor)
+#
+# Architecture:
+#   Panel + MariaDB + Redis run here in Docker Compose.
+#   Pelican Wings runs separately as a NixOS systemd service on this host.
+#   Traefik on Panoptes proxies panel.0x21.uk → this host via Tailscale.
+#
+# Managed by: systemd service 'pterodactyl' (see hosts/hephaestus/services/stacks.nix)
+# Secrets injected via sops-nix EnvironmentFile: MYSQL_ROOT_PASSWORD, MYSQL_PASSWORD
+# TAILSCALE_IP injected via NixOS systemd environment (net.tailscale.hephaestus)
+#
+# First-run checklist:
+#   1. Wait for panel to be healthy:
+#        docker compose logs -f panel
+#   2. Visit https://panel.0x21.uk — a web installer will guide you through setup
+#   3. Add a Location, then add a Node pointing to this host:
+#        - FQDN: hephaestus Tailscale IP
+#        - Daemon Port: 8443
+#        - Daemon SFTP Port: 2022
+#   4. Copy Wings config from Panel → Nodes → Configuration tab
+#   5. On this host:
+#        sudo mkdir -p /etc/pterodactyl
+#        sudo tee /etc/pterodactyl/config.yml  # paste Wings config here
+#        sudo systemctl start pterodactyl-wings
+
+name: pterodactyl
+
+networks:
+  pterodactyl:
+    name: pterodactyl
+
+volumes:
+  db-data:
+  panel-data:
+  panel-logs:
+
+services:
+
+  # --------------------------------------------------------------------------
+  # MariaDB — Panel database
+  # --------------------------------------------------------------------------
+  database:
+    image: mariadb:10.11
+    container_name: pterodactyl-db
+    networks: [ pterodactyl ]
+    restart: unless-stopped
+    stop_grace_period: 30s
+    command: --default-authentication-plugin=mysql_native_password
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    healthcheck:
+      test: [ "CMD", "healthcheck.sh", "--connect", "--innodb_initialized" ]
+      start_period: 30s
+      interval:     30s
+      retries:      5
+      timeout:      10s
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}   # secret — injected via sops EnvironmentFile
+      MYSQL_DATABASE:      panel
+      MYSQL_USER:          pelican
+      MYSQL_PASSWORD:      ${MYSQL_PASSWORD}         # secret
+    volumes:
+      - db-data:/var/lib/mysql
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  # --------------------------------------------------------------------------
+  # Redis — Panel cache + session store
+  # --------------------------------------------------------------------------
+  cache:
+    image: redis:7-alpine
+    container_name: pterodactyl-cache
+    networks: [ pterodactyl ]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    command: --save 60 1 --loglevel warning
+    healthcheck:
+      test: [ "CMD-SHELL", "redis-cli ping | grep PONG" ]
+      start_period: 20s
+      interval:     30s
+      retries:      5
+      timeout:      3s
+
+  # --------------------------------------------------------------------------
+  # Pelican Panel — game server web UI
+  #
+  # Bound to the Tailscale interface only (TAILSCALE_IP:8080:80).
+  # TAILSCALE_IP injected from net.tailscale.hephaestus via systemd environment.
+  # Traefik on Panoptes proxies panel.0x21.uk → HEPHAESTUS_TAILSCALE_IP:8080.
+  #
+  # BEHIND_PROXY=true: Caddy binds to :80 only (no TLS — Traefik handles it).
+  # Pelican Wings runs separately as a NixOS systemd service.
+  # --------------------------------------------------------------------------
+  panel:
+    image: ghcr.io/pelican-dev/panel:v1.0.0-beta33
+    container_name: pterodactyl-panel
+    networks: [ pterodactyl ]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    ports:
+      # Tailscale-only — public internet cannot reach this.
+      # TAILSCALE_IP injected via NixOS systemd environment (net.tailscale.hephaestus).
+      - "${TAILSCALE_IP}:8080:80"
+    environment:
+      APP_URL:          "https://panel.0x21.uk"
+      APP_ENV:          production
+      APP_DEBUG:        "false"
+      BEHIND_PROXY:     "true"
+      # Tailscale CGNAT range — Traefik on Panoptes proxies via Tailscale.
+      # Caddy (used by Pelican) requires CIDR ranges, not "*".
+      TRUSTED_PROXIES:  "100.64.0.0/10"
+      XDG_DATA_HOME:    /pelican-data
+      CACHE_STORE:      redis
+      SESSION_DRIVER:   redis
+      QUEUE_CONNECTION: redis
+      REDIS_HOST:       cache
+      DB_CONNECTION:    mariadb
+      DB_HOST:          database
+      DB_PORT:          "3306"
+      DB_DATABASE:      panel
+      DB_USERNAME:      pelican
+      DB_PASSWORD:      ${MYSQL_PASSWORD}           # same as MYSQL_PASSWORD above
+      MAIL_MAILER:      log
+    volumes:
+      - panel-data:/pelican-data
+      - panel-logs:/var/www/html/storage/logs
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:80/" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      database:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"

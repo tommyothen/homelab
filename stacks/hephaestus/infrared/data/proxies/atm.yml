@@ -1,0 +1,6 @@
+# atm.0x21.dev → Pterodactyl-managed server on port 25567
+domains:
+  - "atm.0x21.dev"
+
+addresses:
+  - 127.0.0.1:25567

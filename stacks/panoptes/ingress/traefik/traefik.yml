@@ -1,0 +1,68 @@
+# stacks/panoptes/ingress/traefik/traefik.yml
+#
+# Traefik v3 static configuration.
+# Dynamic routes live in ./dynamic/ (file provider).
+
+api:
+  dashboard: true
+  insecure: false   # dashboard exposed via Traefik labels, not :8080
+
+log:
+  level: INFO
+
+entryPoints:
+  # Tailscale-only entrypoints (admin/control-plane routes)
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        certResolver: letsencrypt
+        domains:
+          - main: "0x21.uk"
+            sans:
+              - "*.0x21.uk"
+
+  # LAN entrypoints (selected home-facing routes only)
+  lanweb:
+    address: ":8080"
+    http:
+      redirections:
+        entryPoint:
+          to: lanwebsecure
+          scheme: https
+  lanwebsecure:
+    address: ":8443"
+    http:
+      tls:
+        certResolver: letsencrypt
+        domains:
+          - main: "0x21.uk"
+            sans:
+              - "*.0x21.uk"
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: "{{ env \"ACME_EMAIL\" }}"
+      storage: /acme/acme.json
+      dnsChallenge:
+        provider: cloudflare
+        resolvers:
+          - "1.1.1.1:53"
+          - "1.0.0.1:53"
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: panoptes
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true

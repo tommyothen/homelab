@@ -1,0 +1,18 @@
+# File provider route for AdGuard Home web UI on Cerberus.
+#
+# Uses the Cerberus Tailscale IP — the web UI is firewall-restricted to
+# tailscale0 on Cerberus, so Traefik reaches it via the Tailscale overlay.
+
+http:
+  routers:
+    adguard:
+      rule: "Host(`adguard.0x21.uk`)"
+      service: adguard
+      entryPoints: [ websecure ]
+      middlewares: [ authentik ]
+
+  services:
+    adguard:
+      loadBalancer:
+        servers:
+          - url: 'http://{{ env "CERBERUS_TAILSCALE_IP" }}:3000'

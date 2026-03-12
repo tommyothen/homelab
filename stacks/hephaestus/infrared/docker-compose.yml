@@ -1,0 +1,32 @@
+---
+# stacks/hephaestus/infrared/docker-compose.yml
+#
+# Infrared — Minecraft reverse proxy
+#
+# Routes connections on port 25565 to game servers by hostname:
+#   mc.0x21.dev  → localhost:25566
+#   atm.0x21.dev → localhost:25567
+#
+# network_mode: host is required so Infrared can reach Wings-managed
+# game servers that bind to the host's loopback (localhost:25566 etc.).
+#
+# Managed by: systemd service 'infrared' (see hosts/hephaestus/services/stacks.nix)
+#
+# Pterodactyl note: do NOT assign port 25565 as an allocation in the Panel.
+# Infrared owns 25565 exclusively. Game servers must use 25566, 25567, etc.
+
+name: infrared
+
+services:
+  infrared:
+    image: ghcr.io/haveachin/infrared:2.0.0-alpha.r2
+    container_name: infrared
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./data:/etc/infrared
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"

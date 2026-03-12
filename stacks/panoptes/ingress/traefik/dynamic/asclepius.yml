@@ -1,0 +1,23 @@
+# File provider route for PiKVM (Asclepius).
+#
+# PiKVM serves HTTPS with its own certificate, so Traefik skips backend cert
+# verification when proxying over Tailscale.
+
+http:
+  routers:
+    kvm:
+      rule: "Host(`kvm.0x21.uk`)"
+      service: asclepius-kvm
+      entryPoints: [ websecure ]
+      middlewares: [ authentik ]
+
+  services:
+    asclepius-kvm:
+      loadBalancer:
+        serversTransport: asclepius-kvm-transport
+        servers:
+          - url: "https://{{ env "ASCLEPIUS_TAILSCALE_IP" }}"
+
+  serversTransports:
+    asclepius-kvm-transport:
+      insecureSkipVerify: true

@@ -1,0 +1,18 @@
+# File provider route for Home Assistant (Hestia, Home Assistant Yellow).
+#
+# Home Assistant is LAN-only and not on Tailscale. Traefik proxies to it over
+# the local network while exposing the route on both admin (Tailscale) and LAN
+# entrypoints.
+
+http:
+  routers:
+    home-assistant:
+      rule: "Host(`home.0x21.uk`)"
+      service: home-assistant
+      entryPoints: [ websecure, lanwebsecure ]
+
+  services:
+    home-assistant:
+      loadBalancer:
+        servers:
+          - url: 'http://{{ env "HESTIA_LAN_IP" }}:8123'

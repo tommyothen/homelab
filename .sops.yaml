@@ -1,0 +1,70 @@
+# .sops.yaml — SOPS encryption configuration
+#
+# Maps secret files to the age keys that can decrypt them.
+# Every secrets file must match one of the path_regex rules below.
+#
+# ---------------------------------------------------------------------------
+# FILLING IN KEYS
+# ---------------------------------------------------------------------------
+#
+# Host keys — derived from SSH ed25519 host key after first boot:
+#
+#   nix shell nixpkgs#ssh-to-age -c \
+#     ssh-to-age < /etc/ssh/ssh_host_ed25519_key.pub
+#
+# If nix-command/flakes are not enabled yet:
+#
+#   nix --extra-experimental-features "nix-command flakes" \
+#     shell nixpkgs#ssh-to-age -c \
+#     ssh-to-age < /etc/ssh/ssh_host_ed25519_key.pub
+#
+# Admin key — generate once on your workstation:
+#
+#   age-keygen -o ~/.config/sops/age/keys.txt
+#   age-keygen -y ~/.config/sops/age/keys.txt   # print public key
+#
+# Replace each age1REPLACE_... placeholder below with the real key.
+# ---------------------------------------------------------------------------
+
+keys:
+  # Host age keys (derived from SSH ed25519 host keys — fill in after first boot)
+  - &cerberus    age1acm2zuk8p6r3esfgzsvjux6eeyzzh5fr87xk62k6x0y26n0rwsashrdgdg
+  - &dionysus    age1a67mr9uc9xwxmclgemmpjhn0pk9dzur4y88vcwsv249x9yq4zulsmlpu6t
+  - &panoptes    age1s4gldgftfvc4lthwr6zgrjl3ycc23whwp3yr5qmcgulez5td9pkqcc6enp
+  - &metis       age1syj7dlvavrpjnzef22t9qye80uw2nv9q4fvvtxyy7252sxtntqms65al7h
+  - &tartarus    age18v5cuthp39t2h3wtc6w4nwfcr9ypwx5ksdeg28l7w8xvw9r9vymq7ze4rk
+  - &hephaestus  age1r5hhf2dujk7zkute2e0mrsqqdxvljyh87aeru68p86zme6ufd48q97meyj
+
+  # Admin key — your workstation age key for creating/editing secrets
+  - &admin       age1tsau5qfx6xdylzljqd0p4h6w24gmlkghgkq6tjyvswfqf4a6ushqfc3pyc
+
+creation_rules:
+  # Each host gets its own secrets file, readable only by that host + admin.
+  - path_regex: hosts/cerberus/secrets\.yaml$
+    key_groups:
+      - age: [ *cerberus, *admin ]
+
+  - path_regex: hosts/dionysus/secrets\.yaml$
+    key_groups:
+      - age: [ *dionysus, *admin ]
+
+  - path_regex: hosts/panoptes/secrets\.yaml$
+    key_groups:
+      - age: [ *panoptes, *admin ]
+
+  - path_regex: hosts/metis/secrets\.yaml$
+    key_groups:
+      - age: [ *metis, *admin ]
+
+  - path_regex: hosts/tartarus/secrets\.yaml$
+    key_groups:
+      - age: [ *tartarus, *admin ]
+
+  - path_regex: hosts/hephaestus/secrets\.yaml$
+    key_groups:
+      - age: [ *hephaestus, *admin ]
+
+  # Shared secrets readable by all hosts + admin
+  - path_regex: secrets/shared\.yaml$
+    key_groups:
+      - age: [ *cerberus, *dionysus, *panoptes, *metis, *tartarus, *hephaestus, *admin ]

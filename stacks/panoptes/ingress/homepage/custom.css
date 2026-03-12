@@ -1,0 +1,10 @@
+/* Subtle dot-grid background */
+body {
+    background-image: radial-gradient(circle, rgba(255,255,255,0.04) 1px, transparent 1px);
+    background-size: 24px 24px;
+}
+
+/* Slightly softer card borders */
+#page_container .service-card {
+    border-color: rgba(255,255,255,0.06);
+}

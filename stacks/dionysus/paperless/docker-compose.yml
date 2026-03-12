@@ -1,0 +1,109 @@
+---
+# stacks/dionysus/paperless/docker-compose.yml
+#
+# Paperless-ngx — document management system
+# Runs on Dionysus alongside media stacks.
+#
+# Managed by: systemd service 'paperless' (see hosts/dionysus/services/stacks.nix)
+# Secrets injected via sops-nix EnvironmentFile:
+#   PAPERLESS_SECRET_KEY, PAPERLESS_DB_PASS, PAPERLESS_ADMIN_PASS
+#
+# First-run:
+#   Admin user is created automatically from PAPERLESS_ADMIN_USER/PASS env vars.
+
+name: paperless
+
+services:
+
+  paperless-postgresql:
+    image: docker.io/library/postgres@sha256:b7587f3cb74f4f4b2a4f9d67f052edbf95eb93f4fec7c5ada3792546caaf7383 # pinned-from: docker.io/library/postgres:16-alpine
+    container_name: paperless-postgresql
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}" ]
+      start_period: 20s
+      interval:     30s
+      retries:      5
+      timeout:      5s
+    environment:
+      POSTGRES_USER:     paperless
+      POSTGRES_PASSWORD: ${PAPERLESS_DB_PASS}   # secret — injected via sops EnvironmentFile
+      POSTGRES_DB:       paperless
+    volumes:
+      - paperless-postgresql:/var/lib/postgresql/data
+
+  paperless-redis:
+    image: docker.io/library/redis@sha256:8b81dd37ff027bec4e516d41acfbe9fe2460070dc6d4a4570a2ac5b9d59df065 # pinned-from: docker.io/library/redis:7-alpine
+    container_name: paperless-redis
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: [ "CMD-SHELL", "redis-cli ping | grep PONG" ]
+      start_period: 20s
+      interval:     30s
+      retries:      5
+      timeout:      3s
+
+  paperless-web:
+    image: ghcr.io/paperless-ngx/paperless-ngx@sha256:1d99ede700ffdf7aa44899b5fee29c8c279f175769b6cb295e91e9f15772728e # pinned-from: ghcr.io/paperless-ngx/paperless-ngx:latest
+    container_name: paperless-web
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      PAPERLESS_REDIS:          redis://paperless-redis:6379
+      PAPERLESS_DBHOST:         paperless-postgresql
+      PAPERLESS_DBUSER:         paperless
+      PAPERLESS_DBPASS:         ${PAPERLESS_DB_PASS}      # secret
+      PAPERLESS_DBNAME:         paperless
+      PAPERLESS_SECRET_KEY:     ${PAPERLESS_SECRET_KEY}   # secret
+      PAPERLESS_ADMIN_USER:     admin
+      PAPERLESS_ADMIN_PASSWORD: ${PAPERLESS_ADMIN_PASS}   # secret
+      PAPERLESS_OCR_LANGUAGE:   eng
+      PAPERLESS_TIME_ZONE:      Europe/London
+      PAPERLESS_URL:            https://paperless.0x21.uk
+    volumes:
+      - /var/lib/appdata/paperless/data:/usr/src/paperless/data
+      - /var/lib/appdata/paperless/media:/usr/src/paperless/media
+      - /var/lib/appdata/paperless/export:/usr/src/paperless/export
+      - /var/lib/appdata/paperless/consume:/usr/src/paperless/consume
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      paperless-postgresql:
+        condition: service_healthy
+      paperless-redis:
+        condition: service_healthy
+
+volumes:
+  paperless-postgresql:

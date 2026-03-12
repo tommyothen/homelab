@@ -1,0 +1,11 @@
+# /etc/infrared/config.yml
+# Infrared v2 global config — bind address and basic rate limiting.
+
+bind: 0.0.0.0:25565
+
+keepAliveTimeout: 30s
+
+filters:
+  rateLimiter:
+    requestLimit: 10
+    windowLength: 1s

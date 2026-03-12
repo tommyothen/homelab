@@ -1,0 +1,208 @@
+---
+# stacks/dionysus/personal/docker-compose.yml
+#
+# Personal services on Dionysus:
+#   Mealie, Actual Budget, Wallos, Stirling PDF, IT-Tools
+#
+# Managed by: systemd service 'personal' (see hosts/dionysus/services/stacks.nix)
+# Secrets injected via sops-nix EnvironmentFile:
+#   MEALIE_DB_PASS
+
+name: personal
+
+networks:
+  personal:
+    name: personal
+
+volumes:
+  mealie-postgresql:
+
+services:
+
+  # --------------------------------------------------------------------------
+  # Mealie — recipe manager
+  # --------------------------------------------------------------------------
+  mealie-postgresql:
+    image: docker.io/library/postgres@sha256:b7587f3cb74f4f4b2a4f9d67f052edbf95eb93f4fec7c5ada3792546caaf7383 # pinned-from: docker.io/library/postgres:16-alpine
+    container_name: mealie-postgresql
+    networks: [ personal ]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}" ]
+      start_period: 20s
+      interval:     30s
+      retries:      5
+      timeout:      5s
+    environment:
+      POSTGRES_USER:     mealie
+      POSTGRES_PASSWORD: ${MEALIE_DB_PASS}   # secret — injected via sops EnvironmentFile
+      POSTGRES_DB:       mealie
+    volumes:
+      - mealie-postgresql:/var/lib/postgresql/data
+
+  mealie:
+    image: ghcr.io/mealie-recipes/mealie@sha256:d99fc2844c04288526d6cbecc9ac1b6c32d8ea6054236d56857107bbaf70ea5c # pinned-from: ghcr.io/mealie-recipes/mealie:latest
+    container_name: mealie
+    networks: [ personal ]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/api/app/about" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    environment:
+      PUID:              "1000"
+      PGID:              "1000"
+      TZ:                Europe/London
+      BASE_URL:          https://mealie.0x21.uk
+      DB_ENGINE:         postgres
+      POSTGRES_USER:     mealie
+      POSTGRES_PASSWORD: ${MEALIE_DB_PASS}   # secret
+      POSTGRES_DB:       mealie
+      POSTGRES_SERVER:   mealie-postgresql
+      POSTGRES_PORT:     "5432"
+    volumes:
+      - /var/lib/appdata/mealie:/app/data
+    ports:
+      - "9925:9000"
+    depends_on:
+      mealie-postgresql:
+        condition: service_healthy
+
+  # --------------------------------------------------------------------------
+  # Actual Budget — personal finance (local-first, zero-knowledge)
+  # --------------------------------------------------------------------------
+  actual-budget:
+    image: actualbudget/actual-server@sha256:ea21a0b6243797d35ef6c4a8713c87efaba8fec3b3663220fa3af61f352fba5e # pinned-from: actualbudget/actual-server:latest
+    container_name: actual-budget
+    networks: [ personal ]
+    environment:
+      TZ: Europe/London
+    volumes:
+      - /var/lib/appdata/actual-budget:/data
+    ports:
+      - "5006:5006"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:5006" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # --------------------------------------------------------------------------
+  # Wallos — subscription tracker
+  # --------------------------------------------------------------------------
+  wallos:
+    image: bellamy/wallos@sha256:46f25daeebedbe00f409abdc82f07d1bde6818dc9fee8b360b0b09c453c4b999 # pinned-from: bellamy/wallos:latest
+    container_name: wallos
+    networks: [ personal ]
+    environment:
+      TZ: Europe/London
+    volumes:
+      - /var/lib/appdata/wallos:/var/www/html/db
+    ports:
+      - "8282:80"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:80" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # --------------------------------------------------------------------------
+  # Stirling PDF — 50+ PDF operations, all processed locally
+  # --------------------------------------------------------------------------
+  stirling-pdf:
+    image: stirlingtools/stirling-pdf@sha256:cc287bb47ad754ce052ee3c35d023f753532cbbde63dffc6abb150f338ed41ce # pinned-from: stirlingtools/stirling-pdf:latest
+    container_name: stirling-pdf
+    networks: [ personal ]
+    environment:
+      TZ:                                 Europe/London
+      INSTALL_BOOK_AND_ADVANCED_HTML_OPS: "false"
+    volumes:
+      - /var/lib/appdata/stirling-pdf/configs:/configs
+      - /var/lib/appdata/stirling-pdf/logs:/logs
+    ports:
+      - "7777:8080"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/api/v1/info/status" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # --------------------------------------------------------------------------
+  # IT-Tools — developer utilities (Base64, QR, hash, network tools, etc.)
+  # All processing is client-side — no data leaves the container.
+  # --------------------------------------------------------------------------
+  it-tools:
+    image: corentinth/it-tools@sha256:8b8128748339583ca951af03dfe02a9a4d7363f61a216226fc28030731a5a61f # pinned-from: corentinth/it-tools:latest
+    container_name: it-tools
+    networks: [ personal ]
+    ports:
+      - "8183:80"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:80" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

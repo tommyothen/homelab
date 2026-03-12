@@ -1,0 +1,22 @@
+# File provider route for Proxmox VE (Zeus).
+#
+# Proxmox serves HTTPS with its own certificate on port 8006, so Traefik skips
+# backend cert verification when proxying over LAN.
+
+http:
+  routers:
+    proxmox:
+      rule: "Host(`pve.0x21.uk`)"
+      service: zeus-proxmox
+      entryPoints: [ websecure ]
+
+  services:
+    zeus-proxmox:
+      loadBalancer:
+        serversTransport: zeus-proxmox-transport
+        servers:
+          - url: 'https://{{ env "ZEUS_LAN_IP" }}:8006'
+
+  serversTransports:
+    zeus-proxmox-transport:
+      insecureSkipVerify: true

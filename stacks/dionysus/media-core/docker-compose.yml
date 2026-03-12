@@ -1,0 +1,229 @@
+---
+# stacks/dionysus/media-core/docker-compose.yml
+#
+# Core media stack: Plex, Sonarr, Radarr, Prowlarr, Seerr, SABnzbd
+#
+# Managed by: systemd service 'media-core' (see hosts/dionysus/services/stacks.nix)
+# Secrets injected via sops-nix EnvironmentFile — no .env file needed.
+# Non-secret config is hardcoded below.
+#
+# NFS paths on Dionysus:
+#   /data/media        — Mnemosyne media-hdd pool
+#   /var/lib/appdata   — Mnemosyne apps-ssd pool
+#   /data/downloads    — local SSD (fast, for in-progress downloads)
+
+name: media-core
+
+networks:
+  media:
+    name: media          # other stacks (media-vpn) join this as external
+
+services:
+
+  # --------------------------------------------------------------------------
+  # Plex Media Server
+  # Uses host networking so GDM (local network discovery) works correctly.
+  # Hardware transcoding via /dev/dri (Intel QSV / VA-API).
+  # --------------------------------------------------------------------------
+  plex:
+    image: lscr.io/linuxserver/plex@sha256:79dfc89947410ec120a3e34cf68f746f6f154de20772e6f27b9998ca9bd65a5e # pinned-from: lscr.io/linuxserver/plex:latest
+    container_name: plex
+    network_mode: host    # required for GDM; means no "networks:" block here
+    environment:
+      PUID:        "1000"
+      PGID:        "1000"
+      TZ:          Europe/London
+      VERSION:     docker
+      PLEX_CLAIM:  ${PLEX_CLAIM}   # secret — injected via sops EnvironmentFile
+    volumes:
+      - /var/lib/appdata/plex:/config
+      - /data/media/movies:/data/movies:ro
+      - /data/media/tv:/data/tv:ro
+      # Transcode temp dir — put on local SSD for performance
+      - /tmp/plex-transcode:/transcode
+    devices:
+      - /dev/dri:/dev/dri   # remove if no GPU / hardware transcoding
+    restart: always
+    stop_grace_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:32400/identity" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  # --------------------------------------------------------------------------
+  # Sonarr — TV series management
+  # --------------------------------------------------------------------------
+  sonarr:
+    image: lscr.io/linuxserver/sonarr@sha256:37be832b78548e3f55f69c45b50e3b14d18df1b6def2a4994258217e67efb1a1 # pinned-from: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    networks: [ media ]
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ:   Europe/London
+    volumes:
+      - /var/lib/appdata/sonarr:/config
+      # Single unified /data mount so Sonarr can hardlink within the same FS
+      - /data/media:/data/media
+      - /data/downloads:/data/downloads
+    ports:
+      - "8989:8989"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8989/ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # --------------------------------------------------------------------------
+  # Radarr — movie management
+  # --------------------------------------------------------------------------
+  radarr:
+    image: lscr.io/linuxserver/radarr@sha256:a360633a3682d41e96f71a07ff36ecbdf2394a9628465b84b0a8437087715b41 # pinned-from: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    networks: [ media ]
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ:   Europe/London
+    volumes:
+      - /var/lib/appdata/radarr:/config
+      - /data/media:/data/media
+      - /data/downloads:/data/downloads
+    ports:
+      - "7878:7878"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:7878/ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # --------------------------------------------------------------------------
+  # Prowlarr — indexer manager (feeds Sonarr + Radarr)
+  # --------------------------------------------------------------------------
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr@sha256:e74a1e093dcc223d671d4b7061e2b4946f1989a4d3059654ff4e623b731c9134 # pinned-from: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    networks: [ media ]
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ:   Europe/London
+    volumes:
+      - /var/lib/appdata/prowlarr:/config
+    ports:
+      - "9696:9696"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9696/ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # --------------------------------------------------------------------------
+  # Seerr — request management (Overseerr + Jellyseerr merger, Feb 2026)
+  # Runs as non-root UID 1000; init: true is required.
+  # Existing Overseerr appdata/seerr config auto-migrates on first start.
+  # --------------------------------------------------------------------------
+  seerr:
+    image: ghcr.io/seerr-team/seerr@sha256:b35ba0461c4a1033d117ac1e5968fd4cbe777899e4cbfbdeaf3d10a42a0eb7e9 # pinned-from: ghcr.io/seerr-team/seerr:latest
+    container_name: seerr
+    init: true
+    networks: [ media ]
+    environment:
+      TZ: Europe/London
+    volumes:
+      - /var/lib/appdata/seerr:/app/config
+    ports:
+      - "5055:5055"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:5055/api/v1/status" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # --------------------------------------------------------------------------
+  # SABnzbd — Usenet downloader (primary download client)
+  # --------------------------------------------------------------------------
+  sabnzbd:
+    image: lscr.io/linuxserver/sabnzbd@sha256:1a26f56dfc047b62d5ddc20bc92bdebfbe7c3cb58d2d3523958838a09182d77a # pinned-from: lscr.io/linuxserver/sabnzbd:latest
+    container_name: sabnzbd
+    networks: [ media ]
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ:   Europe/London
+    volumes:
+      - /var/lib/appdata/sabnzbd:/config
+      - /data/downloads:/data/downloads
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/api?mode=version" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"

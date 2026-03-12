@@ -1,0 +1,6 @@
+# mc.0x21.dev → Pterodactyl-managed server on port 25566
+domains:
+  - "mc.0x21.dev"
+
+addresses:
+  - 127.0.0.1:25566

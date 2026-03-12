@@ -1,0 +1,177 @@
+# Action Gateway — allowlist of approved actions.
+#
+# ONLY actions defined here can be requested via the API. Any POST to
+# /action/<name> with a name not in this file is rejected with HTTP 400.
+#
+# Fields:
+#   description  Human-readable summary shown in the Discord approval embed.
+#   script       Filename of the script in scripts/actions/ to execute.
+#   timeout      Maximum seconds the script is allowed to run before being
+#                killed. Keep generous enough for slow SSH hops + docker pulls.
+#
+# Environment overrides for each script are documented in the script headers.
+# Set them in /var/lib/appdata/action-gateway/.env on Panoptes.
+
+actions:
+
+  # --------------------------------------------------------------------------
+  # Monitoring & Reporting
+  # --------------------------------------------------------------------------
+
+  health-check:
+    description: "Run a full-stack health check across all homelab services."
+    script: health-check.sh
+    timeout: 120
+
+  daily-report:
+    description: "Generate a health summary: node status, disk usage, active alerts, container counts, and snapshot age."
+    script: daily-report.sh
+    timeout: 60
+
+  backup-check:
+    description: "Check TrueNAS snapshot ages on apps-ssd and media-hdd. Alerts if any pool's last snapshot is older than 25h."
+    script: backup-check.sh
+    timeout: 30
+
+  # --------------------------------------------------------------------------
+  # Container Operations (Dionysus)
+  # --------------------------------------------------------------------------
+
+  restart-plex:
+    description: "Restart the Plex Media Server container on Dionysus."
+    script: restart-plex.sh
+    timeout: 60
+
+  restart-stack-media:
+    description: "Restart the media-core stack on Dionysus (Plex, Sonarr, Radarr, Prowlarr, Seerr, SABnzbd)."
+    script: restart-stack-media.sh
+    timeout: 120
+
+  restart-stack-books:
+    description: "Restart the books stack on Dionysus (LazyLibrarian, Calibre-Web, Shelfmark)."
+    script: restart-stack-books.sh
+    timeout: 120
+
+  restart-stack-personal:
+    description: "Restart the personal stack on Dionysus (Mealie, Actual, Wallos, Stirling PDF, IT-Tools)."
+    script: restart-stack-personal.sh
+    timeout: 120
+
+  restart-stack-paperless:
+    description: "Restart the paperless stack on Dionysus (Paperless-ngx, PostgreSQL, Redis)."
+    script: restart-stack-paperless.sh
+    timeout: 120
+
+  update-containers:
+    description: "Pull latest images and recreate all Dionysus stacks. Plex is updated last to minimise downtime."
+    script: update-containers.sh
+    timeout: 600
+
+  rotate-logs:
+    description: "Find and truncate oversized Docker container log files on Dionysus (threshold: 100MB)."
+    script: rotate-logs.sh
+    timeout: 60
+
+  digest-audit:
+    description: "Scan compose stacks for floating tags and fail if any images are not pinned to immutable digests."
+    script: digest-audit.sh
+    timeout: 120
+
+  refresh-digests:
+    description: "Refresh existing digest pins from pinned source tags and re-run immutable pin checks."
+    script: refresh-digests.sh
+    timeout: 300
+
+  # --------------------------------------------------------------------------
+  # NixOS Host Rebuilds
+  # --------------------------------------------------------------------------
+
+  rebuild-dionysus:
+    description: "Pull the latest homelab repo and run nixos-rebuild switch on Dionysus."
+    script: rebuild-dionysus.sh
+    timeout: 300
+
+  rebuild-panoptes:
+    description: "Pull the latest homelab repo and run nixos-rebuild switch on Panoptes."
+    script: rebuild-panoptes.sh
+    timeout: 300
+
+  rebuild-cerberus:
+    description: "Pull the latest homelab repo and run nixos-rebuild switch on Cerberus."
+    script: rebuild-cerberus.sh
+    timeout: 300
+
+  rebuild-metis:
+    description: "Pull the latest homelab repo and run nixos-rebuild switch on Metis."
+    script: rebuild-metis.sh
+    timeout: 300
+
+  # --------------------------------------------------------------------------
+  # Backup Operations
+  # --------------------------------------------------------------------------
+
+  backup-now:
+    description: "Trigger an ad-hoc restic backup from Mnemosyne to Oracle (apps-ssd dataset). Requires backup SSH key setup — see runbooks/offsite-backup.md."
+    script: backup-now.sh
+    timeout: 3600
+
+  dr-test:
+    description: "Run the disaster recovery readiness check: verify Oracle reachability, list most recent restic snapshot, and confirm decryptability."
+    script: dr-test.sh
+    timeout: 120
+
+  # --------------------------------------------------------------------------
+  # Ingress & Networking
+  # --------------------------------------------------------------------------
+
+  restart-stack-ingress:
+    description: "Restart the ingress stack on Panoptes (Traefik, Authentik, Gatus, etc.)."
+    script: restart-stack-ingress.sh
+    timeout: 120
+
+  restart-container:
+    description: "Restart a specific Docker container on a target host."
+    script: restart-container.sh
+    timeout: 60
+    params:
+      CONTAINER_NAME:
+        required: true
+        pattern: "^[a-zA-Z0-9_-]+$"
+        description: "Name of the container to restart."
+      TARGET_HOST:
+        required: true
+        pattern: "^(dionysus|panoptes)$"
+        description: "Target host (dionysus or panoptes)."
+
+  tailscale-status:
+    description: "Show all Tailscale mesh nodes with online/offline status and last seen time."
+    script: tailscale-status.sh
+    timeout: 30
+
+  cert-status:
+    description: "Check ACME certificate expiry dates from Traefik. Warns if any cert expires within 14 days."
+    script: cert-status.sh
+    timeout: 30
+
+  # --------------------------------------------------------------------------
+  # Infrastructure Status
+  # --------------------------------------------------------------------------
+
+  proxmox-vm-status:
+    description: "List all Proxmox VMs on Zeus with status, CPU, memory, and uptime."
+    script: proxmox-vm-status.sh
+    timeout: 30
+
+  truenas-snapshot-status:
+    description: "List recent ZFS snapshots across all TrueNAS datasets with creation times and counts."
+    script: truenas-snapshot-status.sh
+    timeout: 30
+
+  # --------------------------------------------------------------------------
+  # Metis Operations
+  # --------------------------------------------------------------------------
+
+  sync-metis-repo:
+    description: "Pull the latest homelab repo on Metis's local clone (git fetch + reset to origin/main)."
+    script: sync-metis-repo.sh
+    timeout: 60

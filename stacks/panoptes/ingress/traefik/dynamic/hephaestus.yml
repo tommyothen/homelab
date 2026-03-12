@@ -1,0 +1,22 @@
+# File provider routes for services running on Hephaestus (OCI ARM game server).
+#
+# Backend IPs use the Hephaestus Tailscale IP (HEPHAESTUS_TAILSCALE_IP env var).
+# Port 8080 on Hephaestus is firewall-restricted to tailscale0 — the Panel is
+# never directly reachable from the public internet. Traefik proxies it here.
+#
+# Wings API (port 8443) is NOT proxied through Traefik — the Panel calls Wings
+# directly over Tailscale when managing game servers.
+
+http:
+  routers:
+    pterodactyl-panel:
+      rule: "Host(`panel.0x21.uk`)"
+      service: pterodactyl-panel
+      entryPoints: [ websecure ]
+      middlewares: [ authentik ]
+
+  services:
+    pterodactyl-panel:
+      loadBalancer:
+        servers:
+          - url: "http://{{ env \"HEPHAESTUS_TAILSCALE_IP\" }}:8080"

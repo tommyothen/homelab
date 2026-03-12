@@ -1,0 +1,36 @@
+# stacks/panoptes/ingress/homepage/widgets.yaml
+# Top-of-page info bar
+
+- greeting:
+    text_size: xl
+    text: "Hey 👋"
+
+- datetime:
+    text_size: l
+    format:
+      dateStyle: long
+      timeStyle: short
+      hour12: false
+
+- search:
+    provider: duckduckgo
+    target: _blank
+
+- sonarr:
+    url: http://dionysus:8989
+    key: "{{HOMEPAGE_VAR_SONARR_API_KEY}}"
+    enableQueue: true
+
+- radarr:
+    url: http://dionysus:7878
+    key: "{{HOMEPAGE_VAR_RADARR_API_KEY}}"
+    enableQueue: true
+
+- pihole:
+    url: http://cerberus:8053
+    key: "{{HOMEPAGE_VAR_PIHOLE_API_KEY}}"
+
+- speedtest:
+    url: http://speedtest-tracker:80   # container name, internal port (same Docker network)
+    slug: latest
+    bitratePrecision: 0

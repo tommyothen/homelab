@@ -1,0 +1,28 @@
+# File provider routes for NixOS-native services on Panoptes (same host as Traefik).
+#
+# Backend URLs use host-gateway — Docker's special hostname that resolves to
+# the host's IP on the br-panoptes bridge. The NixOS firewall allows traffic
+# from br-panoptes to these ports; they are NOT open on any external interface.
+
+http:
+  routers:
+    grafana:
+      rule: "Host(`grafana.0x21.uk`)"
+      service: grafana
+      entryPoints: [ websecure ]
+      middlewares: [ authentik ]
+    prometheus:
+      rule: "Host(`prometheus.0x21.uk`)"
+      service: prometheus
+      entryPoints: [ websecure ]
+      middlewares: [ authentik ]
+
+  services:
+    grafana:
+      loadBalancer:
+        servers:
+          - url: "http://host-gateway:3000"
+    prometheus:
+      loadBalancer:
+        servers:
+          - url: "http://host-gateway:9090"

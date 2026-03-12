@@ -1,0 +1,581 @@
+---
+# stacks/panoptes/ingress/docker-compose.yml
+#
+# Panoptes services: Traefik, Gatus, Homepage, Homelab Hub, Authentik,
+#                    Notifiarr, Diun, Speedtest Tracker, Miniflux, PVE Exporter
+#
+# Managed by: systemd service 'ingress' (see hosts/panoptes/services/stacks.nix)
+# Secrets injected via sops-nix EnvironmentFile (ingress_secrets):
+#   CF_DNS_API_TOKEN, AUTHENTIK_SECRET_KEY, AUTHENTIK_DB_PASS,
+#   SPEEDTEST_APP_KEY, MINIFLUX_DB_PASS, MINIFLUX_ADMIN_PASS,
+#   DISCORD_WEBHOOK_URL, DISCORD_MENTIONS, OPENCLAW_HOOKS_TOKEN, all homepage API keys, PVE_TOKEN_VALUE
+# IPs injected via NixOS systemd environment:
+#   PANOPTES_TAILSCALE_IP, PANOPTES_LAN_IP,
+#   ZEUS_LAN_IP,
+#   HESTIA_LAN_IP,
+#   DIONYSUS_TAILSCALE_IP, CERBERUS_TAILSCALE_IP, HEPHAESTUS_TAILSCALE_IP,
+#   ASCLEPIUS_TAILSCALE_IP, METIS_TAILSCALE_IP, TARTARUS_TAILSCALE_IP, HEPHAESTUS_PUBLIC_IP
+#
+# Authentik first-run:
+#   Visit http://panoptes:9000/if/flow/initial-setup/ to create the admin user.
+
+name: panoptes
+
+networks:
+  panoptes:
+    name: panoptes
+    driver_opts:
+      # Predictable bridge name so NixOS firewall can open specific ports to it.
+      # Allows Traefik to reach Grafana/Prometheus (NixOS-native services) on
+      # the host without exposing them to any external interface.
+      com.docker.network.bridge.name: br-panoptes
+  # Isolated network for the Docker socket proxy — only authentik-worker joins this.
+  socket-proxy:
+    name: socket-proxy
+    internal: true   # no external routing
+
+volumes:
+  authentik-postgresql:
+  authentik-redis:
+  authentik-media:
+  authentik-certs:
+  miniflux-postgresql:
+  speedtest-db:
+  acme:
+
+services:
+
+  # --------------------------------------------------------------------------
+  # Traefik — reverse proxy + HTTPS termination
+  # Wildcard cert via Cloudflare DNS challenge.
+  # Split ingress model:
+  #   - Tailscale entrypoints for admin routes
+  #   - LAN entrypoints for home/plex/seerr routes
+  # Static config: ./traefik/traefik.yml
+  # Dynamic routes: ./traefik/dynamic/ (file provider)
+  # --------------------------------------------------------------------------
+  traefik:
+    image: traefik@sha256:2cd5cc75530c8d07ae0587c743d23eb30cae2436d07017a5ff78498b1a43d09f # pinned-from: traefik:v3.3
+    container_name: traefik
+    networks: [ panoptes ]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    environment:
+      CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN}       # secret — injected via sops EnvironmentFile
+      ACME_EMAIL: ${ACME_EMAIL}                    # secret — injected via sops EnvironmentFile
+      # Tailscale IPs for backend routing — service ports are tailscale0-only
+      # on remote hosts, so Traefik reaches them via the Tailscale overlay.
+      # Used via {{ env "..." }} in the file provider dynamic configs.
+      # Injected from net.* in flake.nix via NixOS systemd environment.
+      DIONYSUS_TAILSCALE_IP:    ${DIONYSUS_TAILSCALE_IP}
+      CERBERUS_TAILSCALE_IP:    ${CERBERUS_TAILSCALE_IP}
+      HEPHAESTUS_TAILSCALE_IP:  ${HEPHAESTUS_TAILSCALE_IP}
+      ASCLEPIUS_TAILSCALE_IP:   ${ASCLEPIUS_TAILSCALE_IP}
+      ZEUS_LAN_IP:              ${ZEUS_LAN_IP}
+    ports:
+      # Admin entrypoints bound to the Panoptes Tailscale IP.
+      - "${PANOPTES_TAILSCALE_IP}:80:80"
+      - "${PANOPTES_TAILSCALE_IP}:443:443"
+      # LAN entrypoints bound to the Panoptes LAN IP.
+      - "${PANOPTES_LAN_IP}:80:8080"
+      - "${PANOPTES_LAN_IP}:443:8443"
+    extra_hosts:
+      # Allows Traefik to reach NixOS-native services (Grafana, Prometheus) on
+      # this host via the br-panoptes bridge. The NixOS firewall allows traffic
+      # from that bridge to those ports specifically.
+      - "host-gateway:host-gateway"
+    volumes:
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - acme:/acme
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.traefik-dashboard.rule: "Host(`traefik.0x21.uk`)"
+      traefik.http.routers.traefik-dashboard.entrypoints: websecure
+      traefik.http.routers.traefik-dashboard.service: api@internal
+      traefik.http.routers.traefik-dashboard.middlewares: authentik@file
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # --------------------------------------------------------------------------
+  # Gatus — declarative uptime monitoring
+  # Config lives in ./gatus/config.yaml (checked into git).
+  # --------------------------------------------------------------------------
+  gatus:
+    image: twinproduction/gatus@sha256:5f1c61ca012079a87202f7477e109f7499e11a1ed68cd683c775ccb35720d675 # pinned-from: twinproduction/gatus:latest
+    container_name: gatus
+    networks: [ panoptes ]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      # Tailscale IPs injected into config.yaml via ${VAR} substitution.
+      # Needed because Dionysus/Cerberus service ports are tailscale0-only.
+      # All injected via NixOS systemd environment (see stacks.nix).
+      DIONYSUS_TAILSCALE_IP:   ${DIONYSUS_TAILSCALE_IP}
+      CERBERUS_TAILSCALE_IP:   ${CERBERUS_TAILSCALE_IP}
+      HESTIA_LAN_IP:           ${HESTIA_LAN_IP}
+      METIS_TAILSCALE_IP:      ${METIS_TAILSCALE_IP}
+      TARTARUS_TAILSCALE_IP:   ${TARTARUS_TAILSCALE_IP}
+      HEPHAESTUS_TAILSCALE_IP: ${HEPHAESTUS_TAILSCALE_IP}
+      HEPHAESTUS_PUBLIC_IP:    ${HEPHAESTUS_PUBLIC_IP}
+      TRUENAS_HOST:            mnemosyne
+    extra_hosts:
+      - "host-gateway:host-gateway"   # reach Grafana/Prometheus on this host
+    volumes:
+      - ./gatus/config.yaml:/config/config.yaml:ro
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.gatus.rule: "Host(`status.0x21.uk`)"
+      traefik.http.routers.gatus.entrypoints: websecure
+      traefik.http.routers.gatus.middlewares: authentik@file
+      traefik.http.services.gatus.loadbalancer.server.port: "8080"
+
+  # --------------------------------------------------------------------------
+  # Homepage — dashboard
+  # Config files live in ./homepage/ (bind-mounted read-only).
+  # API keys for widgets are passed as HOMEPAGE_VAR_* env vars.
+  # --------------------------------------------------------------------------
+  homepage:
+    image: ghcr.io/gethomepage/homepage@sha256:0b596092c0b55fe4c65379a428a3fe90bd192f10d1b07d189a34fe5fabe7eedb # pinned-from: ghcr.io/gethomepage/homepage:latest
+    container_name: homepage
+    networks: [ panoptes ]
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    environment:
+      TZ: Europe/London
+      # Arr stack API keys (used in services.yaml via {{HOMEPAGE_VAR_*}})
+      # All secrets injected via sops EnvironmentFile.
+      HOMEPAGE_VAR_SONARR_API_KEY:    ${SONARR_API_KEY}
+      HOMEPAGE_VAR_RADARR_API_KEY:    ${RADARR_API_KEY}
+      HOMEPAGE_VAR_PROWLARR_API_KEY:  ${PROWLARR_API_KEY}
+      HOMEPAGE_VAR_SABNZBD_API_KEY:   ${SABNZBD_API_KEY}
+      HOMEPAGE_VAR_PLEX_API_KEY:      ${PLEX_API_KEY}
+      HOMEPAGE_VAR_ADGUARD_USER:      admin
+      HOMEPAGE_VAR_ADGUARD_PASS:      ${ADGUARD_PASS}
+      HOMEPAGE_VAR_QBIT_USERNAME:     admin
+      HOMEPAGE_VAR_QBIT_PASSWORD:     ${QBIT_PASSWORD}
+      HOMEPAGE_VAR_SPEEDTEST_API_KEY: ${SPEEDTEST_API_KEY}
+      HOMEPAGE_VAR_PROXMOX_USERNAME:  prometheus@pve!monitoring
+      HOMEPAGE_VAR_PROXMOX_PASSWORD:  ${PVE_TOKEN_VALUE}
+    volumes:
+      - ./homepage:/app/config:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro   # local container status dots
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.homepage.rule: "Host(`dash.0x21.uk`)"
+      traefik.http.routers.homepage.entrypoints: websecure
+      traefik.http.routers.homepage.middlewares: authentik@file
+      traefik.http.services.homepage.loadbalancer.server.port: "3000"
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # --------------------------------------------------------------------------
+  # Homelab Hub — inventory + topology map
+  # Data persists in /var/lib/appdata/homelab-hub on Panoptes.
+  # --------------------------------------------------------------------------
+  homelab-hub:
+    image: raidowl/homelab-hub@sha256:d4586016ee12ba1bfd39ecc326a2d89f4acc1aa715ff2c15b1b98b20f3ab4aec # pinned-from: raidowl/homelab-hub:1.0.3
+    container_name: homelab-hub
+    networks: [ panoptes ]
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    volumes:
+      - /var/lib/appdata/homelab-hub:/data
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.homelab-hub.rule: "Host(`map.0x21.uk`)"
+      traefik.http.routers.homelab-hub.entrypoints: websecure
+      traefik.http.routers.homelab-hub.middlewares: authentik@file
+      traefik.http.services.homelab-hub.loadbalancer.server.port: "8000"
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # --------------------------------------------------------------------------
+  # Authentik — SSO / identity provider
+  # Traefik forward auth middleware for all internal services.
+  # --------------------------------------------------------------------------
+  authentik-postgresql:
+    image: docker.io/library/postgres@sha256:b7587f3cb74f4f4b2a4f9d67f052edbf95eb93f4fec7c5ada3792546caaf7383 # pinned-from: docker.io/library/postgres:16-alpine
+    container_name: authentik-postgresql
+    networks: [ panoptes ]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}" ]
+      start_period: 20s
+      interval:     30s
+      retries:      5
+      timeout:      5s
+    environment:
+      POSTGRES_USER:     authentik
+      POSTGRES_PASSWORD: ${AUTHENTIK_DB_PASS}   # secret — injected via sops EnvironmentFile
+      POSTGRES_DB:       authentik
+    volumes:
+      - authentik-postgresql:/var/lib/postgresql/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  authentik-redis:
+    image: docker.io/library/redis@sha256:2afba59292f25f5d1af200496db41bea2c6c816b059f57ae74703a50a03a27d0 # pinned-from: docker.io/library/redis:alpine
+    container_name: authentik-redis
+    networks: [ panoptes ]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    command: --save 60 1 --loglevel warning
+    healthcheck:
+      test: [ "CMD-SHELL", "redis-cli ping | grep PONG" ]
+      start_period: 20s
+      interval:     30s
+      retries:      5
+      timeout:      3s
+    volumes:
+      - authentik-redis:/data
+
+  authentik-server:
+    image: ghcr.io/goauthentik/server@sha256:36233579415aa2e2e52a6b0c45736cb871fe71460bfe0cf95d83f67528fb1182 # pinned-from: ghcr.io/goauthentik/server:latest
+    container_name: authentik-server
+    networks: [ panoptes ]
+    command: server
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    environment:
+      AUTHENTIK_REDIS__HOST:              authentik-redis
+      AUTHENTIK_POSTGRESQL__HOST:         authentik-postgresql
+      AUTHENTIK_POSTGRESQL__USER:         authentik
+      AUTHENTIK_POSTGRESQL__NAME:         authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD:     ${AUTHENTIK_DB_PASS}   # secret
+      AUTHENTIK_SECRET_KEY:               ${AUTHENTIK_SECRET_KEY} # secret
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+    volumes:
+      - authentik-media:/media
+      - authentik-certs:/certs
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.authentik.rule: "Host(`auth.0x21.uk`)"
+      traefik.http.routers.authentik.entrypoints: websecure
+      traefik.http.services.authentik.loadbalancer.server.port: "9000"
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+    depends_on:
+      authentik-postgresql:
+        condition: service_healthy
+      authentik-redis:
+        condition: service_healthy
+
+  # --------------------------------------------------------------------------
+  # Docker socket proxy — restricts what authentik-worker can do via the
+  # Docker API. Sits on an isolated internal network; only authentik-worker
+  # can reach it. The proxy itself mounts the real socket read-write.
+  # --------------------------------------------------------------------------
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy@sha256:1f3a6f303320723d199d2316a3e82b2e2685d86c275d5e3deeaf182573b47476 # pinned-from: tecnativa/docker-socket-proxy:latest
+    container_name: docker-proxy
+    networks: [ socket-proxy ]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      CONTAINERS: 1
+      IMAGES:     1
+      NETWORKS:   1
+      INFO:       1
+      POST:       1   # Authentik needs POST to manage outpost containers
+      BUILD:      0
+      AUTH:       0
+      DELETE:     0
+      EXEC:       0
+      VOLUMES:    0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+
+  authentik-worker:
+    image: ghcr.io/goauthentik/server@sha256:36233579415aa2e2e52a6b0c45736cb871fe71460bfe0cf95d83f67528fb1182 # pinned-from: ghcr.io/goauthentik/server:latest
+    container_name: authentik-worker
+    networks: [ panoptes, socket-proxy ]
+    command: worker
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    user: root   # Required for Authentik cert/blueprint management (not for Docker socket)
+    environment:
+      AUTHENTIK_REDIS__HOST:              authentik-redis
+      AUTHENTIK_POSTGRESQL__HOST:         authentik-postgresql
+      AUTHENTIK_POSTGRESQL__USER:         authentik
+      AUTHENTIK_POSTGRESQL__NAME:         authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD:     ${AUTHENTIK_DB_PASS}    # secret
+      AUTHENTIK_SECRET_KEY:               ${AUTHENTIK_SECRET_KEY}  # secret
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+      DOCKER_HOST:                        tcp://docker-proxy:2375
+    volumes:
+      - authentik-media:/media
+      - authentik-certs:/certs
+    depends_on:
+      authentik-postgresql:
+        condition: service_healthy
+      authentik-redis:
+        condition: service_healthy
+      docker-proxy:
+        condition: service_started
+
+  # --------------------------------------------------------------------------
+  # Notifiarr — unified arr stack -> Discord notifications
+  # Requires a free account at https://notifiarr.com to get an API key.
+  # --------------------------------------------------------------------------
+  notifiarr:
+    image: golift/notifiarr@sha256:88fbfd256b28b7a6edb2ea6cd39ab999168d9e0d58b729bc5a9171d4843ee221 # pinned-from: golift/notifiarr:latest
+    container_name: notifiarr
+    networks: [ panoptes ]
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      TZ: Europe/London
+    volumes:
+      - /var/lib/appdata/notifiarr:/config
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.notifiarr.rule: "Host(`notifiarr.0x21.uk`)"
+      traefik.http.routers.notifiarr.entrypoints: websecure
+      traefik.http.routers.notifiarr.middlewares: authentik@file
+      traefik.http.services.notifiarr.loadbalancer.server.port: "5454"
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:5454/api/status" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # --------------------------------------------------------------------------
+  # Diun — Docker image update notifier -> Discord
+  # Watches running containers and alerts when new image versions are out.
+  # --------------------------------------------------------------------------
+  diun:
+    image: crazymax/diun@sha256:3e277cd1f1262fe6ff1047e5550f6f2e1c860c3c60b0058625e3c69888a4cc8d # pinned-from: crazymax/diun:latest
+    container_name: diun
+    networks: [ panoptes ]
+    command: serve
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      TZ:                            Europe/London
+      LOG_LEVEL:                     info
+      DIUN_WATCH_SCHEDULE:           "0 8 * * *"   # daily at 08:00
+      DIUN_WATCH_FIRSTCHECKNOTIF:    "false"
+      DIUN_PROVIDERS_DOCKER:         "true"
+      DIUN_NOTIF_DISCORD_WEBHOOKURL: ${DISCORD_WEBHOOK_URL}   # secret
+      DIUN_NOTIF_DISCORD_MENTIONS:   ${DISCORD_MENTIONS}
+      # OpenClaw webhook on Metis — triggers agent investigation on image updates.
+      # Fires alongside Discord notifications (both are independent).
+      DIUN_NOTIF_WEBHOOK_ENDPOINT:   http://${METIS_TAILSCALE_IP}:18789/hooks/diun
+      DIUN_NOTIF_WEBHOOK_METHOD:     POST
+      DIUN_NOTIF_WEBHOOK_HEADERS:    "Authorization=Bearer ${OPENCLAW_HOOKS_TOKEN}"
+    volumes:
+      - /var/lib/appdata/diun:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      test: [ "CMD", "diun", "--version" ]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # --------------------------------------------------------------------------
+  # Speedtest Tracker — internet speed history
+  # Exposes Prometheus metrics at /api/prometheus.
+  # Port 8889 on host loopback lets the NixOS Prometheus scrape it directly.
+  # --------------------------------------------------------------------------
+  speedtest-tracker:
+    image: lscr.io/linuxserver/speedtest-tracker@sha256:4023b3e993d3764efe41d65eb4d1be8d9ff2ad8d756eb71de35fe805882ff0b5 # pinned-from: lscr.io/linuxserver/speedtest-tracker:latest
+    container_name: speedtest-tracker
+    networks: [ panoptes ]
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      PUID:               "1000"
+      PGID:               "1000"
+      TZ:                 Europe/London
+      APP_KEY:            ${SPEEDTEST_APP_KEY}   # secret — injected via sops EnvironmentFile
+      DB_CONNECTION:      sqlite
+      SPEEDTEST_SCHEDULE: "0 */6 * * *"          # every 6 hours
+      SPEEDTEST_SERVERS:  ""                      # leave blank for auto
+      DISPLAY_TIMEZONE:   Europe/London
+    ports:
+      - "127.0.0.1:8889:80"   # Prometheus scrapes /api/prometheus on this port
+    volumes:
+      - speedtest-db:/config
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.speedtest.rule: "Host(`speedtest.0x21.uk`)"
+      traefik.http.routers.speedtest.entrypoints: websecure
+      traefik.http.routers.speedtest.middlewares: authentik@file
+      traefik.http.services.speedtest.loadbalancer.server.port: "80"
+    restart: unless-stopped
+
+  # --------------------------------------------------------------------------
+  # Miniflux — RSS reader
+  # --------------------------------------------------------------------------
+  miniflux-postgresql:
+    image: docker.io/library/postgres@sha256:b7587f3cb74f4f4b2a4f9d67f052edbf95eb93f4fec7c5ada3792546caaf7383 # pinned-from: docker.io/library/postgres:16-alpine
+    container_name: miniflux-postgresql
+    networks: [ panoptes ]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}" ]
+      start_period: 20s
+      interval:     30s
+      retries:      5
+      timeout:      5s
+    environment:
+      POSTGRES_USER:     miniflux
+      POSTGRES_PASSWORD: ${MINIFLUX_DB_PASS}   # secret — injected via sops EnvironmentFile
+      POSTGRES_DB:       miniflux
+    volumes:
+      - miniflux-postgresql:/var/lib/postgresql/data
+
+  miniflux:
+    image: miniflux/miniflux@sha256:802ab7d045826d047883476e2310bf59f5d9b3875f7a8106fa0c43638d01fd64 # pinned-from: miniflux/miniflux:latest
+    container_name: miniflux
+    networks: [ panoptes ]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      DATABASE_URL:   postgres://miniflux:${MINIFLUX_DB_PASS}@miniflux-postgresql/miniflux?sslmode=disable
+      RUN_MIGRATIONS: "1"
+      CREATE_ADMIN:   "1"
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: ${MINIFLUX_ADMIN_PASS}   # secret
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.miniflux.rule: "Host(`rss.0x21.uk`)"
+      traefik.http.routers.miniflux.entrypoints: websecure
+      traefik.http.routers.miniflux.middlewares: authentik@file
+      traefik.http.services.miniflux.loadbalancer.server.port: "8080"
+    depends_on:
+      miniflux-postgresql:
+        condition: service_healthy
+
+  # --------------------------------------------------------------------------
+  # Prometheus PVE Exporter — Proxmox VE metrics for Prometheus/Grafana
+  #
+  # Requires a Proxmox API token with read-only access. Create on Zeus:
+  #   pveum user add prometheus@pve
+  #   pveum role add PrometheusRole \
+  #     --privs "VM.Audit Sys.Audit Datastore.Audit Pool.Audit"
+  #   pveum aclmod / --users prometheus@pve --roles PrometheusRole
+  #   pveum user token add prometheus@pve monitoring --privsep 0
+  #
+  # The token value (UUID) goes in PVE_TOKEN_VALUE in hosts/panoptes/secrets.yaml.
+  # Port 9221 on host loopback lets the NixOS Prometheus scrape it.
+  # --------------------------------------------------------------------------
+  pve-exporter:
+    image: prompve/prometheus-pve-exporter@sha256:c0a6d578f116b6a26670f03a33f8949bc6036caa71d4ec3c199fd490c1b71644 # pinned-from: prompve/prometheus-pve-exporter:latest
+    container_name: pve-exporter
+    networks: [ panoptes ]
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      PVE_USER:        prometheus@pve
+      PVE_TOKEN_NAME:  monitoring
+      PVE_TOKEN_VALUE: ${PVE_TOKEN_VALUE}   # secret — injected via sops EnvironmentFile
+      PVE_VERIFY_SSL:  "false"
+    ports:
+      - "127.0.0.1:9221:9221"   # Prometheus scrapes /pve?target=<zeus-ip> here

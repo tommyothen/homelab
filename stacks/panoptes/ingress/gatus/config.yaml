@@ -1,0 +1,218 @@
+# stacks/panoptes/ingress/gatus/config.yaml
+#
+# Declarative uptime monitoring for all homelab services.
+#
+# Backend IPs for Dionysus and Cerberus use Tailscale IPs (${VAR} substitution).
+# Those hosts' service ports are firewall-restricted to tailscale0, so Gatus
+# (running in Docker on Panoptes) reaches them via the Panoptes host's Tailscale.
+# Pass DIONYSUS_TAILSCALE_IP and CERBERUS_TAILSCALE_IP as env vars in compose.
+
+storage:
+  type: sqlite
+  path: /data/data.db
+
+ui:
+  title: 0x21 Homelab Status
+  header: 0x21 Status
+
+endpoints:
+  # --- Media ---
+  - name: Plex
+    group: Media
+    url: "http://${DIONYSUS_TAILSCALE_IP}:32400/web"
+    interval: 60s
+    conditions:
+      - "[STATUS] < 500"
+
+  - name: Sonarr
+    group: Media
+    url: "http://${DIONYSUS_TAILSCALE_IP}:8989/ping"
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Radarr
+    group: Media
+    url: "http://${DIONYSUS_TAILSCALE_IP}:7878/ping"
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Prowlarr
+    group: Media
+    url: "http://${DIONYSUS_TAILSCALE_IP}:9696/ping"
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Seerr
+    group: Media
+    url: "http://${DIONYSUS_TAILSCALE_IP}:5055/api/v1/status"
+    interval: 60s
+    conditions:
+      - "[STATUS] < 500"
+
+  - name: SABnzbd
+    group: Media
+    url: "http://${DIONYSUS_TAILSCALE_IP}:8080"
+    interval: 60s
+    conditions:
+      - "[STATUS] < 500"
+
+  - name: qBittorrent
+    group: Media
+    url: "http://${DIONYSUS_TAILSCALE_IP}:8090"
+    interval: 60s
+    conditions:
+      - "[STATUS] < 500"
+
+  - name: Tdarr
+    group: Media
+    url: "http://${DIONYSUS_TAILSCALE_IP}:8265"
+    interval: 60s
+    conditions:
+      - "[STATUS] < 500"
+
+  # --- Books ---
+  - name: LazyLibrarian
+    group: Books
+    url: "http://${DIONYSUS_TAILSCALE_IP}:5299"
+    interval: 60s
+    conditions:
+      - "[STATUS] < 500"
+
+  - name: Calibre-Web
+    group: Books
+    url: "http://${DIONYSUS_TAILSCALE_IP}:8083"
+    interval: 60s
+    conditions:
+      - "[STATUS] < 500"
+
+  # --- Personal ---
+  - name: Mealie
+    group: Personal
+    url: "http://${DIONYSUS_TAILSCALE_IP}:9925"
+    interval: 60s
+    conditions:
+      - "[STATUS] < 500"
+
+  - name: Paperless-ngx
+    group: Personal
+    url: "http://${DIONYSUS_TAILSCALE_IP}:8000"
+    interval: 60s
+    conditions:
+      - "[STATUS] < 500"
+
+  - name: Miniflux
+    group: Personal
+    url: "http://miniflux:8080/healthcheck"
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
+
+  # --- Observability ---
+  - name: Grafana
+    group: Observability
+    url: "http://host-gateway:3000/api/health"
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Prometheus
+    group: Observability
+    url: "http://host-gateway:9090/-/healthy"
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
+
+  # Metis: the watcher needs a watcher.
+  # OpenClaw exposes a health endpoint at /health (port 3000 by default).
+  # If Metis goes down (SD card corruption, power supply, etc.) daily reports
+  # and backup checks stop silently — this endpoint catches that.
+  - name: Metis (OpenClaw)
+    group: Observability
+    url: "http://${METIS_TAILSCALE_IP}:3000/health"
+    interval: 120s
+    conditions:
+      - "[STATUS] == 200"
+
+  # --- Infrastructure ---
+  - name: Authentik
+    group: Infrastructure
+    url: "http://authentik-server:9000/-/health/ready/"
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: AdGuard Home
+    group: Infrastructure
+    url: "http://${CERBERUS_TAILSCALE_IP}:3000"
+    interval: 60s
+    conditions:
+      - "[STATUS] < 500"
+
+  - name: Home Assistant
+    group: Infrastructure
+    url: "tcp://${HESTIA_LAN_IP}:8123"
+    interval: 60s
+    conditions:
+      - "[CONNECTED] == true"
+
+  - name: Homelab Hub
+    group: Infrastructure
+    url: "http://homelab-hub:8000/api/health"
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
+
+  # --- DNS ---
+  - name: AdGuard DNS
+    group: Infrastructure
+    url: "${CERBERUS_TAILSCALE_IP}"
+    dns:
+      query-name: "plex.0x21.uk"
+      query-type: "A"
+    interval: 60s
+    conditions:
+      - "[DNS_RCODE] == NOERROR"
+
+  # --- Backup Infrastructure ---
+  # These checks confirm the backup chain is reachable before a backup window fails silently.
+
+  - name: Tartarus (SSH)
+    group: Backup
+    url: "tcp://${TARTARUS_TAILSCALE_IP}:22"
+    interval: 300s   # every 5 minutes — failure here means off-site backup is impossible
+    conditions:
+      - "[CONNECTED] == true"
+
+  - name: TrueNAS API
+    group: Backup
+    url: "http://${TRUENAS_HOST:-mnemosyne}:80/api/v2.0/system/info"
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
+
+  - name: Mnemosyne (NFS)
+    group: Backup
+    url: "tcp://${TRUENAS_HOST:-mnemosyne}:2049"
+    interval: 60s
+    conditions:
+      - "[CONNECTED] == true"
+
+  # --- Game Servers (Hephaestus) ---
+  # Panel reachability (Tailscale-only, proxied by Traefik) + public Minecraft port.
+
+  - name: Hephaestus Panel
+    group: Game Servers
+    url: "http://${HEPHAESTUS_TAILSCALE_IP}:8080"
+    interval: 60s
+    conditions:
+      - "[STATUS] < 500"
+
+  - name: Minecraft (public)
+    group: Game Servers
+    url: "tcp://${HEPHAESTUS_PUBLIC_IP}:25565"
+    interval: 120s   # check every 2 minutes
+    conditions:
+      - "[CONNECTED] == true"

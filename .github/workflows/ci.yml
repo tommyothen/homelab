@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  nix-flake-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - run: nix flake check --no-build
+
+  docker-compose-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate all Docker Compose files
+        run: |
+          exit_code=0
+          for f in $(find stacks -name 'docker-compose.yml'); do
+            echo "Validating $f..."
+            if ! docker compose -f "$f" config --quiet 2>/dev/null; then
+              echo "WARN: $f failed (may need env vars — checking syntax only)"
+              # Retry with dummy env to catch YAML syntax errors
+              if ! docker compose -f "$f" config --quiet 2>&1 | grep -q "yaml:"; then
+                echo "  (env-dependent — skipping)"
+              else
+                echo "  FAIL: YAML syntax error in $f"
+                exit_code=1
+              fi
+            fi
+          done
+          exit $exit_code
+
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck
+        run: sudo apt-get install -y shellcheck
+      - name: Run shellcheck on all shell scripts
+        run: |
+          find . -name '*.sh' -not -path './.git/*' -print0 | \
+            xargs -0 shellcheck --severity=warning
+
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

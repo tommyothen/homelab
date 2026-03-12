@@ -1,0 +1,17 @@
+# stacks/panoptes/ingress/homepage/bookmarks.yaml
+
+- Quick links:
+    - NixOS Packages:
+        - href: https://search.nixos.org/packages
+    - NixOS Options:
+        - href: https://search.nixos.org/options
+    - Nixpkgs PR Tracker:
+        - href: https://nixpk.gs/pr-tracker.html
+    - Anna's Archive:
+        - href: https://annas-archive.li
+
+- Infrastructure:
+    - TrueNAS (Mnemosyne):
+        - href: https://mnemosyne
+    - PiKVM (Asclepius):
+        - href: https://kvm.0x21.uk

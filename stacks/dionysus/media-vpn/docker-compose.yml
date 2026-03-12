@@ -1,0 +1,92 @@
+---
+# stacks/dionysus/media-vpn/docker-compose.yml
+#
+# VPN-isolated torrent stack: Gluetun (Mullvad WireGuard) + qBittorrent
+#
+# All of qBittorrent's traffic is routed through Gluetun's VPN tunnel.
+# The qBittorrent web UI and torrent port are published via Gluetun.
+#
+# Managed by: systemd service 'media-vpn' (see hosts/dionysus/services/stacks.nix)
+# Secrets injected via sops-nix EnvironmentFile (WIREGUARD_PRIVATE_KEY).
+# The media network is created by media-core — bring that stack up first.
+
+name: media-vpn
+
+networks:
+  media:
+    name: media
+    external: true   # shared with media-core stack
+
+services:
+
+  # --------------------------------------------------------------------------
+  # Gluetun — Mullvad WireGuard VPN client container
+  # Docs: https://github.com/qdm12/gluetun/wiki
+  # --------------------------------------------------------------------------
+  gluetun:
+    image: qmcgaw/gluetun@sha256:3e439a7ff285f5782278881675d90ac3b17733e591c68fa7097fa84769ef0e6c # pinned-from: qmcgaw/gluetun:latest
+    container_name: gluetun
+    networks: [ media ]
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      VPN_SERVICE_PROVIDER:  mullvad
+      VPN_TYPE:              wireguard
+      TZ:                    Europe/London
+      SERVER_COUNTRIES:      Netherlands
+      WIREGUARD_PRIVATE_KEY: ${WIREGUARD_PRIVATE_KEY}   # secret — injected via sops EnvironmentFile
+
+    ports:
+      - "8090:8090"        # qBittorrent web UI
+      - "51413:51413/tcp"  # torrent peer connections
+      - "51413:51413/udp"
+    volumes:
+      - /var/lib/appdata/gluetun:/gluetun
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+    healthcheck:
+      test: [ "CMD", "/gluetun-entrypoint", "healthcheck" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # --------------------------------------------------------------------------
+  # qBittorrent — torrent client (runs inside Gluetun's network namespace)
+  # --------------------------------------------------------------------------
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent@sha256:3ee43a4d08ce4a0108e4c8150f570544a8c4a4a11e2ca95b86d46006547f80d5 # pinned-from: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    # All network traffic goes through Gluetun's VPN tunnel.
+    network_mode: "service:gluetun"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    environment:
+      PUID:            "1000"
+      PGID:            "1000"
+      TZ:              Europe/London
+      WEBUI_PORT:      "8090"
+      TORRENTING_PORT: "51413"
+    volumes:
+      - /var/lib/appdata/qbittorrent:/config
+      - /data/downloads:/data/downloads
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"

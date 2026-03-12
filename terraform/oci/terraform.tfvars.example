@@ -1,0 +1,15 @@
+# terraform/oci/terraform.tfvars.example
+#
+# Copy to terraform.tfvars and fill in your OCI values.
+# NEVER commit terraform.tfvars — it contains secrets.
+
+tenancy_ocid     = "ocid1.tenancy.oc1..aaaa..."
+user_ocid        = "ocid1.user.oc1..aaaa..."
+compartment_ocid = "ocid1.tenancy.oc1..aaaa..."  # same as tenancy for root compartment
+region           = "uk-london-1"
+namespace        = "your-namespace"
+fingerprint      = "aa:bb:cc:dd:..."
+private_key_path = "/home/tommy/.oci/oci_api_key.pem"  # absolute path, no ~
+vcn_ocid         = "ocid1.vcn.oc1.uk-london-1.aaaa..."
+subnet_ocid      = "ocid1.subnet.oc1.uk-london-1.aaaa..."
+image_path       = "/home/tommy/Programming/homelab/bootstrap/oci/result/nixos-image-oci-*.qcow2"

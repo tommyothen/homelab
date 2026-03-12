@@ -1,0 +1,96 @@
+---
+# stacks/dionysus/media-extras/docker-compose.yml
+#
+# Optional extras: Seanime (anime-focused media interface), Tdarr (transcoding)
+#
+# Managed by: systemd service 'media-extras' (see hosts/dionysus/services/stacks.nix)
+# No secrets — all config hardcoded below.
+# Bring this stack up after media-core is running (needs the 'media' network).
+
+name: media-extras
+
+networks:
+  media:
+    name: media
+    external: true   # shared with media-core
+
+services:
+
+  # --------------------------------------------------------------------------
+  # Seanime — anime-focused media browser + torrent client integration
+  # Docs: https://github.com/5rahim/seanime
+  # --------------------------------------------------------------------------
+  seanime:
+    image: umagistr/seanime@sha256:bc9517c55ef8dc9f7d86cb5934f7cdb9f62d96b06a925c8aca3044ff13bdd3ee # pinned-from: umagistr/seanime:v3.5.2
+    container_name: seanime
+    networks: [ media ]
+    environment:
+      TZ: Europe/London
+    volumes:
+      - /var/lib/appdata/seanime:/app/.config/Seanime
+      - /data/media/anime:/data/anime          # anime library
+      - /data/downloads:/data/downloads
+    ports:
+      - "43211:43211"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:43211" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # --------------------------------------------------------------------------
+  # Tdarr — media transcoding / health-check / optimization
+  # Uses Intel Quick Sync via /dev/dri for hardware transcoding.
+  # Runs an internal node — no separate Tdarr_Node container needed.
+  # --------------------------------------------------------------------------
+  tdarr:
+    image: ghcr.io/haveagitgat/tdarr@sha256:261290353c745efcaf613aa750094c007b07a1d683d8c22954f95dfb8bbf6b84 # pinned-from: ghcr.io/haveagitgat/tdarr:latest
+    container_name: tdarr
+    networks: [ media ]
+    environment:
+      TZ:           Europe/London
+      PUID:         "1000"
+      PGID:         "1000"
+      UMASK_SET:    "002"
+      internalNode: "true"
+      serverIP:     "0.0.0.0"
+      serverPort:   "8266"
+      webUIPort:    "8265"
+    volumes:
+      - /var/lib/appdata/tdarr/server:/app/server
+      - /var/lib/appdata/tdarr/configs:/app/configs
+      - /var/lib/appdata/tdarr/logs:/app/logs
+      - /data/media:/data/media
+      - /tmp/tdarr-transcode:/temp
+    ports:
+      - "8265:8265"    # Web UI
+      - "8266:8266"    # Server port
+    devices:
+      - /dev/dri:/dev/dri              # Intel Quick Sync hardware transcoding
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8265" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s

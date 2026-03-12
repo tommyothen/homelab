@@ -1,0 +1,135 @@
+---
+# stacks/dionysus/books/docker-compose.yml
+#
+# Books stack: LazyLibrarian → Calibre-Web Automated ← Shelfmark
+#
+# Flow:
+#   LazyLibrarian (automated) ──┐
+#                               ├─→ /data/books/ingest/ → CWA auto-imports → library
+#   Shelfmark (manual search) ──┘
+#
+# OPDS feed for KOReader on your BOOX:
+#   http://dionysus:8083/opds
+#
+# Managed by: systemd service 'books' (see hosts/dionysus/services/stacks.nix)
+# No secrets — all config hardcoded below.
+
+name: books
+
+networks:
+  media:
+    external: true   # joins the same network as the media-core stack
+
+services:
+
+  # --------------------------------------------------------------------------
+  # LazyLibrarian — arr-style book acquisition
+  # Integrates with Prowlarr for indexers. Point download dir at the
+  # CWA ingest folder so imported books are picked up automatically.
+  # --------------------------------------------------------------------------
+  lazylibrarian:
+    image: lscr.io/linuxserver/lazylibrarian@sha256:f345624abd8d235830daad8c524073ef51b580b0792cd8fc906da7e7b35e965b # pinned-from: lscr.io/linuxserver/lazylibrarian:latest
+    container_name: lazylibrarian
+    networks: [ media ]
+    environment:
+      PUID:        "1000"
+      PGID:        "1000"
+      TZ:          Europe/London
+      DOCKER_MODS: linuxserver/mods:lazylibrarian-ffmpeg   # audiobook support
+    volumes:
+      - /var/lib/appdata/lazylibrarian:/config
+      - /data/books/ingest:/ingest          # CWA watches this folder
+      - /data/books/library:/library:ro     # read-only view of the library
+      - /data/downloads:/data/downloads
+    ports:
+      - "5299:5299"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:5299" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # --------------------------------------------------------------------------
+  # Calibre-Web Automated — book library, format conversion, OPDS server
+  #
+  # First run: the /library volume must already contain a Calibre metadata.db,
+  # or CWA will create a fresh one. Set CALIBRE_DBPATH=/library in the web UI
+  # (Admin → Edit Basic Configuration) after first boot.
+  #
+  # KOReader OPDS:  http://dionysus:8083/opds
+  # --------------------------------------------------------------------------
+  calibre-web-automated:
+    image: crocodilestick/calibre-web-automated@sha256:c31a738b6d5ec6982c050063dd3f063b6943eb1051fc81144789f840d9093a8d # pinned-from: crocodilestick/calibre-web-automated:latest
+    container_name: calibre-web-automated
+    networks: [ media ]
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ:   Europe/London
+    volumes:
+      - /var/lib/appdata/calibre-web:/config
+      - /data/books/ingest:/cwa-book-ingest  # CWA auto-import watch folder
+      - /data/books/library:/library
+    ports:
+      - "8083:8083"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8083" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # --------------------------------------------------------------------------
+  # Shelfmark — Anna's Archive frontend
+  # Search and download books; files land in the ingest folder and are
+  # automatically picked up by Calibre-Web Automated.
+  # --------------------------------------------------------------------------
+  shelfmark:
+    image: ghcr.io/calibrain/shelfmark@sha256:963af1a83e0b2022fa8b75f06533177bdcac61d71408190aa668fea4f52a77c8 # pinned-from: ghcr.io/calibrain/shelfmark:latest
+    container_name: shelfmark
+    networks: [ media ]
+    environment:
+      TZ:          Europe/London
+      OUTPUT_PATH: /ingest
+    volumes:
+      - /var/lib/appdata/shelfmark:/data
+      - /data/books/ingest:/ingest
+    ports:
+      - "8181:3000"
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3000" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
