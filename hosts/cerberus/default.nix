@@ -85,28 +85,31 @@
         port          = 53;
         upstream_dns  = [ "1.1.1.1" "1.0.0.1" ];
         bootstrap_dns = [ "1.1.1.1" "1.0.0.1" ];
-
-        # Declarative DNS rewrites.
-        # Most *.0x21.uk domains resolve to Panoptes's Tailscale IP, keeping
-        # admin routes off the LAN. A small allowlist (home/plex/seerr) points
-        # to Panoptes's LAN IP for home-network use.
-        rewrites = [
-          # LAN-facing routes via Traefik LAN entrypoint
-          { domain = "home.${net.domain}"; answer = net.hosts.panoptes; }
-          { domain = "plex.${net.domain}"; answer = net.hosts.panoptes; }
-          { domain = "seerr.${net.domain}"; answer = net.hosts.panoptes; }
-
-          # Default: admin routes stay on Tailscale-only ingress
-          { domain = "*.${net.domain}"; answer = net.tailscale.panoptes; }
-          { domain = "dionysus";        answer = net.hosts.dionysus; }
-          { domain = "panoptes";        answer = net.hosts.panoptes; }
-          { domain = "cerberus";        answer = net.hosts.cerberus; }
-          { domain = "mnemosyne";       answer = net.hosts.mnemosyne; }
-          { domain = "metis";           answer = net.hosts.metis; }
-        ];
       };
 
-      filtering.filtering_enabled = true;
+      # Declarative DNS rewrites.
+      # Most *.0x21.uk domains resolve to Panoptes's Tailscale IP, keeping
+      # admin routes off the LAN. A small allowlist (home/plex/seerr) points
+      # to Panoptes's LAN IP for home-network use.
+      #
+      # NOTE: rewrites live under filtering (not dns) in AdGuard schema v32+.
+      filtering = {
+        filtering_enabled = true;
+        rewrites = [
+          # LAN-facing routes via Traefik LAN entrypoint
+          { domain = "home.${net.domain}"; answer = net.hosts.panoptes; enabled = true; }
+          { domain = "plex.${net.domain}"; answer = net.hosts.panoptes; enabled = true; }
+          { domain = "seerr.${net.domain}"; answer = net.hosts.panoptes; enabled = true; }
+
+          # Default: admin routes stay on Tailscale-only ingress
+          { domain = "*.${net.domain}"; answer = net.tailscale.panoptes; enabled = true; }
+          { domain = "dionysus";        answer = net.hosts.dionysus;     enabled = true; }
+          { domain = "panoptes";        answer = net.hosts.panoptes;     enabled = true; }
+          { domain = "cerberus";        answer = net.hosts.cerberus;     enabled = true; }
+          { domain = "mnemosyne";       answer = net.hosts.mnemosyne;    enabled = true; }
+          { domain = "metis";           answer = net.hosts.metis;        enabled = true; }
+        ];
+      };
     };
   };
 

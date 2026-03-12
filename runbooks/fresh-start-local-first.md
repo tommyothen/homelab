@@ -168,12 +168,14 @@ nix run nixpkgs#nixos-rebuild -- switch \
   --target-host tommy@<tailscale-ip> \
   --build-host tommy@<tailscale-ip> \
   --sudo
-sudo systemctl start media-core media-vpn media-extras books personal paperless
+ssh tommy@<tailscale-ip> "sudo git clone https://github.com/tommyothen/homelab.git /opt/homelab"
+sudo systemctl restart media-core media-vpn media-extras books personal paperless
 ```
 
 Verify:
 
 - NFS mounts present at `/data/media` and `/var/lib/appdata`
+- If Docker fails with "permission denied" on appdata, set Maproot User/Group to `root` on TrueNAS NFS exports
 - Core media services active
 - Plex reachable on LAN: `http://dionysus:32400/web`
 
@@ -189,8 +191,8 @@ nix run nixpkgs#nixos-rebuild -- switch \
   --target-host tommy@<tailscale-ip> \
   --build-host tommy@<tailscale-ip> \
   --sudo
-sudo systemctl start ingress
-sudo systemctl start action-gateway
+ssh tommy@<tailscale-ip> "sudo git clone https://github.com/tommyothen/homelab.git /opt/homelab"
+sudo systemctl restart ingress
 ```
 
 Verify:

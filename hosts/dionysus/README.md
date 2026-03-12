@@ -22,8 +22,12 @@ Dionysus is linked with festivity and leisure, which maps naturally to the enter
 
 1. `sudo nixos-rebuild switch --flake .#dionysus`
 2. `sudo tailscale up`
-3. Confirm NFS mounts from Mnemosyne.
-4. Start stacks: `sudo systemctl start media-core media-vpn media-extras books personal paperless`
+3. Clone the repo for compose files: `sudo git clone https://github.com/tommyothen/homelab.git /opt/homelab`
+4. Confirm NFS mounts from Mnemosyne. If Docker fails with "mkdir permission denied", set **Maproot User/Group** to `root` on the TrueNAS NFS exports.
+5. Restart stacks: `sudo systemctl restart media-core media-vpn media-extras books personal paperless`
+6. If Promtail fails with NAMESPACE error: `sudo mkdir -p /var/lib/promtail && sudo systemctl restart promtail`
+
+See `runbooks/deployment-gotchas.md` for common issues.
 
 ## Key files
 

@@ -10,5 +10,6 @@ Step-by-step recovery and operations guides.
 - `proxmox-nixos-vm-bootstrap.md`: clean install/bootstrap flow for new NixOS VMs on Proxmox.
 - `oci-nixos-deploy.md`: build NixOS ARM64 image, Terraform deploy to OCI, bootstrap Tartarus + Hephaestus.
 - `pi-bootstrap.md`: build NixOS SD card image, flash via Pi Imager, bootstrap Cerberus + Metis.
+- `deployment-gotchas.md`: known issues and fixes encountered during NixOS deployments (AdGuard rewrites, Promtail, NFS, Traefik, Gluetun, etc.).
 
 Keep this directory procedural and incident-focused.

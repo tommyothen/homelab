@@ -37,6 +37,7 @@ services:
       TZ:                    Europe/London
       SERVER_COUNTRIES:      Netherlands
       WIREGUARD_PRIVATE_KEY: ${WIREGUARD_PRIVATE_KEY}   # secret — injected via sops EnvironmentFile
+      WIREGUARD_ADDRESSES:  ${WIREGUARD_ADDRESSES}     # secret — injected via sops EnvironmentFile
 
     ports:
       - "8090:8090"        # qBittorrent web UI

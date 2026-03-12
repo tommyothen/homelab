@@ -39,6 +39,7 @@ volumes:
   authentik-redis:
   authentik-media:
   authentik-certs:
+  gatus-data:
   miniflux-postgresql:
   speedtest-db:
   acme:
@@ -138,6 +139,7 @@ services:
       - "host-gateway:host-gateway"   # reach Grafana/Prometheus on this host
     volumes:
       - ./gatus/config.yaml:/config/config.yaml:ro
+      - gatus-data:/data
     labels:
       traefik.enable: "true"
       traefik.http.routers.gatus.rule: "Host(`status.0x21.uk`)"

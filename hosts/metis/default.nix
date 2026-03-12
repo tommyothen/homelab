@@ -125,10 +125,10 @@ in
       Group = "metis";
       Environment = [
         "HOME=/var/lib/metis"
-        "GIT_SSH_COMMAND=ssh -o StrictHostKeyChecking=accept-new -i /var/lib/metis/.ssh/id_ed25519"
+        "GIT_SSH_COMMAND=${pkgs.openssh}/bin/ssh -o StrictHostKeyChecking=accept-new -i /var/lib/metis/.ssh/id_ed25519"
         "GIT_CONFIG_GLOBAL=/etc/gitconfig-metis"
       ];
-      ExecStart = "${pkgs.git}/bin/git clone git@github.com:TommyOthen/homelab.git /var/lib/metis/homelab";
+      ExecStart = "${pkgs.git}/bin/git clone git@github.com:tommyothen/homelab.git /var/lib/metis/homelab";
       RemainAfterExit = true;
     };
   };
