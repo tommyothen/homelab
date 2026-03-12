@@ -23,6 +23,7 @@ HOMELAB_DIR="${HOMELAB_DIR:-/opt/homelab}"
 
 # Allowlist of stacks that can be restarted via this action
 readonly ALLOWED_STACKS="media-core media-vpn media-extras books personal paperless"
+# shellcheck disable=SC2076 # intentional literal match in space-delimited list
 if [[ ! " ${ALLOWED_STACKS} " =~ " ${STACK_NAME} " ]]; then
   echo "[restart-stack] ERROR: '${STACK_NAME}' is not in the allowed stack list" >&2
   echo "[restart-stack] Allowed: ${ALLOWED_STACKS}" >&2

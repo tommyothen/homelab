@@ -32,6 +32,7 @@ fi
 
 # Validate target host — must be an allowed host
 readonly ALLOWED_HOSTS="dionysus panoptes"
+# shellcheck disable=SC2076 # intentional literal match in space-delimited list
 if [[ ! " ${ALLOWED_HOSTS} " =~ " ${TARGET_HOST} " ]]; then
   echo "[restart-container] ERROR: '${TARGET_HOST}' is not in the allowed host list" >&2
   echo "[restart-container] Allowed: ${ALLOWED_HOSTS}" >&2

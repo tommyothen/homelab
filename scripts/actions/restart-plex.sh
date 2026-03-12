@@ -20,6 +20,7 @@ CONTAINER_NAME="${CONTAINER_NAME:-plex}"
 
 # Validate inputs to prevent command injection.
 readonly ALLOWED_CONTAINERS="plex sonarr radarr sabnzbd"
+# shellcheck disable=SC2076 # intentional literal match in space-delimited list
 if [[ ! " ${ALLOWED_CONTAINERS} " =~ " ${CONTAINER_NAME} " ]]; then
   echo "[restart-plex] ERROR: container '${CONTAINER_NAME}' not in allowlist (${ALLOWED_CONTAINERS})" >&2
   exit 1

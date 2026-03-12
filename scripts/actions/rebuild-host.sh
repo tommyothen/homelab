@@ -57,6 +57,7 @@ HOMELAB_BRANCH="${HOMELAB_BRANCH:-main}"
 
 # Allowed rebuild targets — prevents accidental rebuilds of unexpected hosts
 readonly ALLOWED_TARGETS="cerberus dionysus panoptes metis"
+# shellcheck disable=SC2076 # intentional literal match in space-delimited list
 if [[ ! " ${ALLOWED_TARGETS} " =~ " ${REBUILD_TARGET} " ]]; then
   echo "[rebuild-host] ERROR: '${REBUILD_TARGET}' is not an allowed rebuild target" >&2
   echo "[rebuild-host] Allowed: ${ALLOWED_TARGETS}" >&2
