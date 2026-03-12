@@ -19,4 +19,4 @@ http:
     pterodactyl-panel:
       loadBalancer:
         servers:
-          - url: "http://{{ env \"HEPHAESTUS_TAILSCALE_IP\" }}:8080"
+          - url: 'http://{{ env "HEPHAESTUS_TAILSCALE_IP" }}:8080'

@@ -80,6 +80,7 @@ in
 
       # Secrets decrypted at activation by sops-nix — no .env file needed.
       EnvironmentFile = config.sops.secrets.action_gateway_secrets.path;
+      Environment = [ "DB_PATH=${dataDir}/audit.db" ];
 
       ExecStart = lib.concatStringsSep " " [
         "${pythonEnv}/bin/uvicorn"

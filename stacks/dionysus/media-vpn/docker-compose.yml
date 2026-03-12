@@ -7,7 +7,7 @@
 # The qBittorrent web UI and torrent port are published via Gluetun.
 #
 # Managed by: systemd service 'media-vpn' (see hosts/dionysus/services/stacks.nix)
-# Secrets injected via sops-nix EnvironmentFile (WIREGUARD_PRIVATE_KEY).
+# Secrets injected via sops-nix EnvironmentFile (WIREGUARD_PRIVATE_KEY, WIREGUARD_ADDRESSES).
 # The media network is created by media-core — bring that stack up first.
 
 name: media-vpn
@@ -37,6 +37,7 @@ services:
       TZ:                    Europe/London
       SERVER_COUNTRIES:      Netherlands
       WIREGUARD_PRIVATE_KEY: ${WIREGUARD_PRIVATE_KEY}   # secret — injected via sops EnvironmentFile
+      WIREGUARD_ADDRESSES:  ${WIREGUARD_ADDRESSES}     # secret — injected via sops EnvironmentFile
 
     ports:
       - "8090:8090"        # qBittorrent web UI

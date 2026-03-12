@@ -25,9 +25,12 @@ Argus Panoptes means "all-seeing." This is the monitoring and visibility hub, so
 
 1. `sudo nixos-rebuild switch --flake .#panoptes`
 2. `sudo tailscale up`
-3. Start ingress stack: `sudo systemctl start ingress`
-4. Ensure Action Gateway env exists, then `sudo systemctl start action-gateway`
-5. MCP server starts automatically after rebuild (systemd `multi-user.target`)
+3. Clone the repo for compose files: `sudo git clone https://github.com/tommyothen/homelab.git /opt/homelab`
+4. Restart ingress stack: `sudo systemctl restart ingress`
+5. Action Gateway starts automatically; check `sudo systemctl status action-gateway`
+6. MCP server starts automatically after rebuild (systemd `multi-user.target`)
+
+See `runbooks/deployment-gotchas.md` for common issues.
 
 ## Key files
 

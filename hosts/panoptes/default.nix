@@ -101,8 +101,10 @@
           pipeline_stages = [
             { docker = {}; }
             {
-              regex.expression = "^/var/lib/docker/containers/(?P<container_id>[^/]+)/.*$";
-              source = "filename";
+              regex = {
+                expression = "^/var/lib/docker/containers/(?P<container_id>[^/]+)/.*$";
+                source = "filename";
+              };
             }
           ];
         }
