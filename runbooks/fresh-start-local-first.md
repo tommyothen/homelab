@@ -169,7 +169,7 @@ nix run nixpkgs#nixos-rebuild -- switch \
   --build-host tommy@<tailscale-ip> \
   --sudo
 ssh tommy@<tailscale-ip> "sudo git clone https://github.com/tommyothen/homelab.git /opt/homelab"
-sudo systemctl restart media-core media-vpn media-extras books personal paperless
+ssh tommy@<tailscale-ip> "sudo systemctl restart media-core media-vpn media-extras books personal paperless"
 ```
 
 Verify:
@@ -192,7 +192,7 @@ nix run nixpkgs#nixos-rebuild -- switch \
   --build-host tommy@<tailscale-ip> \
   --sudo
 ssh tommy@<tailscale-ip> "sudo git clone https://github.com/tommyothen/homelab.git /opt/homelab"
-sudo systemctl restart ingress
+ssh tommy@<tailscale-ip> "sudo systemctl restart ingress"
 ```
 
 Verify:
