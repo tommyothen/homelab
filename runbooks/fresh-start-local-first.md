@@ -191,8 +191,8 @@ nix run nixpkgs#nixos-rebuild -- switch \
   --target-host tommy@<tailscale-ip> \
   --build-host tommy@<tailscale-ip> \
   --sudo
-ssh tommy@<tailscale-ip> "sudo git clone https://github.com/tommyothen/homelab.git /opt/homelab"
-ssh tommy@<tailscale-ip> "sudo systemctl restart ingress"
+ssh -o StrictHostKeyChecking=accept-new tommy@<tailscale-ip> "sudo git clone https://github.com/tommyothen/homelab.git /opt/homelab"
+ssh -o StrictHostKeyChecking=accept-new tommy@<tailscale-ip> "sudo systemctl restart ingress"
 ```
 
 Verify:
